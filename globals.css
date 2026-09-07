@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Fond sombre profond, surface bien différenciée */
+    --background: 222 24% 6%;
+    --surface: 220 20% 11%;
+    --border: 220 15% 20%;
+
+    /* Texte clair, net */
+    --ink: 210 25% 95%;
+    --ink-muted: 217 14% 65%;
+
+    /* Accent : teal riche, bon contraste sur fond sombre */
+    --accent: 173 62% 48%;
+    --accent-hover: 173 66% 55%;
+    --accent-foreground: 220 24% 6%;
+
+    /* Statuts, plus saturés pour plus de caractère */
+    --status-todo: 217 15% 58%;
+    --status-progress: 38 95% 62%;
+    --status-blocked: 6 85% 65%;
+    --status-done: 152 60% 52%;
+
+    --danger: 6 85% 62%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-ink antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}

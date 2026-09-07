@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Auth / Workspace ----------
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime     @default(now())
+
+  memberships  Membership[]
+  ownedItems   Item[]       @relation("ItemOwner")
+}
+
+model Workspace {
+  id          String       @id @default(cuid())
+  name        String
+  createdAt   DateTime     @default(now())
+
+  // Seuils d'alerte de sante, configurables par un admin sur la page Parametres.
+  // Valeurs par defaut = comportement historique code en dur (voir DEFAULT_HEALTH_THRESHOLDS
+  // dans lib/health.ts).
+  healthLateRatioRedThreshold      Int     @default(20)
+  healthLateCountOrangeThreshold   Int     @default(1)
+  healthBlockedItemTriggersRed     Boolean @default(true)
+  healthActiveDependencyTriggersRed Boolean @default(true)
+  healthHighRiskTriggersRed        Boolean @default(true)
+  healthMediumRiskTriggersOrange   Boolean @default(true)
+  sprintReferenceDate   DateTime?
+  sprintDurationWeeks   Int?
+  sprintReferenceNumber Int?
+
+  memberships Membership[]
+  roadmaps    Roadmap[]
+  invites     Invite[]
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+model Invite {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  role        Role     @default(MEMBER)
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  role        Role      @default(MEMBER)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+
+  @@unique([userId, workspaceId])
+}
+
+// ---------- Roadmap ----------
+
+model Roadmap {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  // Personnalisation visuelle : couleur choisie dans une palette pastel restreinte
+  // (voir lib/roadmap-theme.ts), icone emoji, ou logo uploade (stocke en base64, prioritaire
+  // sur l'emoji si present). Tous nullables : une roadmap non personnalisee retombe sur les
+  // valeurs par defaut cote UI.
+  color   String?
+  icon    String?
+  logoUrl String?
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+
+  items        Item[]
+  milestones   Milestone[]
+  risks        Risk[]
+  // dependances "Equipe" qui ciblent cette roadmap dans son ensemble (pas une tache precise)
+  dependencies Dependency[]
+  // historique quotidien du statut de sante, pour la tendance affichee sur le dashboard
+  healthSnapshots HealthSnapshot[]
+}
+
+enum ItemStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+model Item {
+  id         String        @id @default(cuid())
+  title      String
+  startDate  DateTime
+  endDate    DateTime
+  status     ItemStatus    @default(TODO)
+  progress   Int           @default(0)
+  position   Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  // Suivi prevu vs reel : non-null tant qu'un decalage de date n'a pas ete valide. Fige au
+  // premier changement de date apres creation (ou apres la derniere validation), sur la
+  // valeur d'AVANT ce changement - reste fixe meme si la date reelle bouge plusieurs fois
+  // avant validation.
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+
+  roadmap    Roadmap       @relation(fields: [roadmapId], references: [id])
+  roadmapId  String
+
+  owner      User?         @relation("ItemOwner", fields: [ownerId], references: [id])
+  ownerId    String?
+
+  // Hierarchie Epic -> sous-item (US), un seul niveau de profondeur autorise
+  parent     Item?         @relation("ItemHierarchy", fields: [parentId], references: [id])
+  parentId   String?
+  children   Item[]        @relation("ItemHierarchy")
+
+  statusLog  StatusHistory[]
+  dateShifts ItemDateShift[]
+
+  // dependances : cet item est "bloque par" d'autres cibles (item / equipe / externe)
+  blockedBy  Dependency[]  @relation("BlockedItem")
+  // dependances : cet item "bloque" d'autres cibles (item / equipe / externe)
+  blocking   Dependency[]  @relation("BlockingItem")
+}
+
+// Historique des decalages prevu/reel valides (avec commentaire optionnel). Une meme tache
+// peut deraper plusieurs fois au cours de sa vie : chaque validation ajoute une ligne plutot
+// que d'ecraser la precedente.
+model ItemDateShift {
+  id                   String   @id @default(cuid())
+  previousPlannedStart DateTime
+  previousPlannedEnd   DateTime
+  newPlannedStart      DateTime
+  newPlannedEnd        DateTime
+  comment              String?
+  createdAt            DateTime @default(now())
+
+  item      Item     @relation(fields: [itemId], references: [id])
+  itemId    String
+}
+
+model StatusHistory {
+  id        String     @id @default(cuid())
+  status    ItemStatus
+  changedAt DateTime   @default(now())
+
+  item      Item       @relation(fields: [itemId], references: [id])
+  itemId    String
+}
+
+model Milestone {
+  id        String   @id @default(cuid())
+  title     String
+  date      DateTime
+  createdAt DateTime @default(now())
+
+  roadmap   Roadmap  @relation(fields: [roadmapId], references: [id])
+  roadmapId String
+}
+
+// ---------- Historique de sante ----------
+// Une ligne par roadmap par jour (contrainte unique roadmapId+day). Ecrite de facon
+// "paresseuse" a la premiere visite du dashboard de la journee (voir lib/health-history.ts),
+// plutot que via un cron separe : l'app ne tourne pas forcement 24/7 sur un poste local.
+
+enum HealthLevel {
+  GREEN
+  ORANGE
+  RED
+}
+
+model HealthSnapshot {
+  id        String      @id @default(cuid())
+  health    HealthLevel
+  day       DateTime    @db.Date
+  createdAt DateTime    @default(now())
+
+  roadmap   Roadmap     @relation(fields: [roadmapId], references: [id])
+  roadmapId String
+
+  @@unique([roadmapId, day])
+}
+
+// ---------- Dependances ----------
+// Une dependance part toujours d'un item reel (celui depuis lequel on la cree).
+// Sa cible peut etre : un autre item (ITEM), une roadmap entiere (TEAM), ou un systeme
+// externe saisi librement (EXTERNAL). Le sens (bloque / est bloque par) determine lequel
+// de blockingItem / blockedItem porte l'item source ; l'autre cote porte soit un item
+// (targetKind = ITEM), soit rien (targetRoadmapId ou externalSystemName pris en compte).
+
+enum DependencyType {
+  FD // Fin -> Debut : la cible ne peut demarrer avant que la source finisse
+  DD // Debut -> Debut : les deux doivent demarrer ensemble
+  FF // Fin -> Fin : les deux doivent finir ensemble
+  DF // Debut -> Fin : la cible ne peut finir avant que la source demarre
+}
+
+enum DependencyTargetKind {
+  ITEM
+  TEAM
+  EXTERNAL
+}
+
+enum DependencyStatus {
+  PENDING
+  RESOLVED
+}
+
+model Dependency {
+  id         String               @id @default(cuid())
+  type       DependencyType       @default(FD)
+  targetKind DependencyTargetKind @default(ITEM)
+  // Pertinent seulement pour targetKind = TEAM ou EXTERNAL (pas de tache a suivre
+  // automatiquement en face). Bascule manuelle "En attente / Resolu".
+  status     DependencyStatus     @default(PENDING)
+  note       String?
+  // Decalage du point de controle de la courbe (glisser-deposer sur la fleche), en ratio
+  // de la distance entre les deux points connectes. Null = courbe automatique par defaut.
+  curveOffsetX Float?
+  curveOffsetY Float?
+  createdAt  DateTime             @default(now())
+
+  blockingItem   Item?   @relation("BlockingItem", fields: [blockingItemId], references: [id])
+  blockingItemId String?
+
+  blockedItem    Item?   @relation("BlockedItem", fields: [blockedItemId], references: [id])
+  blockedItemId  String?
+
+  targetRoadmap   Roadmap? @relation(fields: [targetRoadmapId], references: [id])
+  targetRoadmapId String?
+
+  externalSystemName String?
+}
+
+// ---------- Risques ----------
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum RiskStatus {
+  OPEN
+  MITIGATED
+  CLOSED
+}
+
+model Risk {
+  id          String     @id @default(cuid())
+  title       String
+  impact      RiskLevel
+  probability RiskLevel
+  status      RiskStatus @default(OPEN)
+  createdAt   DateTime   @default(now())
+
+  roadmap     Roadmap    @relation(fields: [roadmapId], references: [id])
+  roadmapId   String
+}
