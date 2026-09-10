@@ -80,13 +80,13 @@ export function RoadmapDependenciesTable({ dependencies }: { dependencies: Roadm
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-ink-muted">
-                <th className="px-5 py-2.5 font-medium">Source</th>
-                <th className="px-5 py-2.5 font-medium"></th>
-                <th className="px-5 py-2.5 font-medium">Cible</th>
-                <th className="px-5 py-2.5 font-medium">Type</th>
-                <th className="px-5 py-2.5 font-medium">Statut</th>
-                <th className="px-5 py-2.5 font-medium">Note</th>
-                <th className="px-5 py-2.5 font-medium"></th>
+                <th className="px-5 py-2.5 font-semibold">Source</th>
+                <th className="px-5 py-2.5 font-semibold"></th>
+                <th className="px-5 py-2.5 font-semibold">Cible</th>
+                <th className="px-5 py-2.5 font-semibold">Type</th>
+                <th className="px-5 py-2.5 font-semibold">Statut</th>
+                <th className="px-5 py-2.5 font-semibold">Note</th>
+                <th className="px-5 py-2.5 font-semibold"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

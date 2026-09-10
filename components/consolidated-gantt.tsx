@@ -525,7 +525,7 @@ export function ConsolidatedGantt({
                 type="button"
                 onClick={() => setZoomLevel(z)}
                 className={cn(
-                  "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                  "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
                   zoomLevel === z ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
                 )}
               >
@@ -564,7 +564,7 @@ export function ConsolidatedGantt({
                       <div
                         key={band.number}
                         className={cn(
-                          "absolute top-0 flex h-full items-center justify-center truncate border-r border-border/40 px-1 text-[10px] font-medium text-ink-muted",
+                          "absolute top-0 flex h-full items-center justify-center truncate border-r border-border/70 px-1 text-[10px] font-medium text-ink-muted",
                           i % 2 === 0 ? "bg-background/50" : "bg-background/20"
                         )}
                         style={{ left, width }}
@@ -587,7 +587,7 @@ export function ConsolidatedGantt({
                 {periodTicks.map((tick) => (
                   <div
                     key={tick.offsetDays}
-                    className="absolute top-0 h-full border-l border-border/60 pl-1.5 text-[11px] capitalize text-ink-muted"
+                    className="absolute top-0 h-full border-l border-border/85 pl-1.5 text-[11px] capitalize text-ink-muted"
                     style={{ left: tick.offsetDays * pxPerDay }}
                   >
                     {tick.label}
@@ -725,8 +725,8 @@ export function ConsolidatedGantt({
                     <path
                       d={a.path}
                       fill="none"
-                      className="stroke-status-blocked/70"
-                      strokeWidth={1.5}
+                      className="stroke-status-blocked/90"
+                      strokeWidth={2}
                       markerEnd="url(#arrowhead)"
                       style={{ pointerEvents: "none" }}
                     />

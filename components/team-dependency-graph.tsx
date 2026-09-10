@@ -8,7 +8,7 @@ export function TeamDependencyGraph({ edges }: { edges: TeamDependencyEdge[] }) 
   if (edges.length === 0) {
     return (
       <div className="flex h-full flex-col rounded-lg border border-border bg-surface p-4">
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
           Dépendances inter-équipes
         </p>
         <div className="flex flex-1 items-center justify-center py-8 text-center text-xs text-ink-muted">
@@ -56,7 +56,7 @@ export function TeamDependencyGraph({ edges }: { edges: TeamDependencyEdge[] }) 
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
         Dépendances inter-équipes
       </p>
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ maxHeight: 270 }}>
@@ -90,8 +90,8 @@ export function TeamDependencyGraph({ edges }: { edges: TeamDependencyEdge[] }) 
               x2={toX}
               y2={toY}
               className="stroke-status-blocked"
-              strokeWidth={1.5}
-              strokeOpacity={0.7}
+              strokeWidth={2}
+              strokeOpacity={0.9}
               markerEnd="url(#team-dep-arrow)"
             >
               {e.count > 1 && <title>{`${e.count} dépendances fusionnées`}</title>}
@@ -105,8 +105,8 @@ export function TeamDependencyGraph({ edges }: { edges: TeamDependencyEdge[] }) 
           const count = degreeById.get(id) ?? 0;
           return (
             <g key={id}>
-              <circle cx={pos.x} cy={pos.y} r={nodeRadius} className="fill-background stroke-border" strokeWidth={1} />
-              <text x={pos.x} y={pos.y + 4} textAnchor="middle" className="fill-ink text-[11px] font-medium">
+              <circle cx={pos.x} cy={pos.y} r={nodeRadius} className="fill-background stroke-border-strong" strokeWidth={1.5} />
+              <text x={pos.x} y={pos.y + 4} textAnchor="middle" className="fill-ink text-[11px] font-semibold">
                 {label}
               </text>
               <text

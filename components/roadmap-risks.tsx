@@ -67,11 +67,11 @@ export function RoadmapRisks({ roadmapId, risks }: { roadmapId: string; risks: R
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-ink-muted">
-                <th className="px-5 py-3 font-medium">Titre</th>
-                <th className="px-5 py-3 font-medium">Impact</th>
-                <th className="px-5 py-3 font-medium">Probabilité</th>
-                <th className="px-5 py-3 font-medium">Statut</th>
-                <th className="px-5 py-3 font-medium"></th>
+                <th className="px-5 py-3 font-semibold">Titre</th>
+                <th className="px-5 py-3 font-semibold">Impact</th>
+                <th className="px-5 py-3 font-semibold">Probabilité</th>
+                <th className="px-5 py-3 font-semibold">Statut</th>
+                <th className="px-5 py-3 font-semibold"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

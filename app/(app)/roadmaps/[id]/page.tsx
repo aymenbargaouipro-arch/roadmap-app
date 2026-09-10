@@ -7,6 +7,7 @@ import { getWorkspaceHealthThresholds } from "@/lib/health-thresholds";
 import { DEFAULT_ROADMAP_COLOR, withAlpha } from "@/lib/roadmap-theme";
 import { HealthBadge } from "@/components/status-badge";
 import { RoadmapSettingsModal } from "@/components/roadmap-settings-modal";
+import { JiraSyncButton } from "@/components/jira-sync-button";
 import { GanttChart } from "@/components/gantt-chart";
 import { RoadmapItems } from "@/components/roadmap-items";
 import { RoadmapDependenciesTable, type RoadmapDependencyRow } from "@/components/roadmap-dependencies-table";
@@ -21,6 +22,7 @@ export default async function RoadmapDetailPage({ params }: { params: { id: stri
     where: { id: params.id },
     include: {
       items: {
+        where: { jiraHiddenAt: null },
         orderBy: { position: "asc" },
         include: {
           owner: { select: { name: true } },
@@ -162,7 +164,8 @@ export default async function RoadmapDetailPage({ params }: { params: { id: stri
           </span>
           <h1 className="text-xl font-semibold text-ink">{roadmap.name}</h1>
           <HealthBadge health={health} />
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {roadmap.jiraProjectKey && <JiraSyncButton roadmapId={roadmap.id} />}
             <RoadmapSettingsModal
               roadmapId={roadmap.id}
               initial={{

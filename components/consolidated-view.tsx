@@ -2,8 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+import { fr } from "date-fns/locale";
 import { HealthBadge } from "@/components/status-badge";
 import { ConsolidatedGantt } from "@/components/consolidated-gantt";
+import { ConsolidatedJiraSyncButton } from "@/components/consolidated-jira-sync-button";
 import { DEFAULT_ROADMAP_COLOR, withAlpha } from "@/lib/roadmap-theme";
 import type { Health } from "@/lib/health";
 import type { WorkspaceItem } from "@/components/dependency-modal";
@@ -34,6 +37,8 @@ type RoadmapForView = {
   color: string | null;
   icon: string | null;
   logoUrl: string | null;
+  jiraProjectKey?: string | null;
+  jiraLastSyncAt?: string | null;
   items: ItemForView[];
 };
 
@@ -108,6 +113,7 @@ export function ConsolidatedView({
 
   const visibleRoadmaps = filteredRoadmaps.filter((r) => r.items.length > 0);
   const now = new Date();
+  const jiraRoadmapIds = roadmaps.filter((r) => r.jiraProjectKey).map((r) => r.id);
 
   return (
     <div className="flex flex-col gap-6">
@@ -118,6 +124,7 @@ export function ConsolidatedView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <ConsolidatedJiraSyncButton roadmapIds={jiraRoadmapIds} />
           <select
             value={teamFilter}
             onChange={(e) => setTeamFilter(e.target.value)}
@@ -192,12 +199,13 @@ export function ConsolidatedView({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-ink-muted">
-                <th className="px-5 py-3 font-medium">Roadmap</th>
-                <th className="px-5 py-3 font-medium">Santé</th>
-                <th className="px-5 py-3 font-medium">Items</th>
-                <th className="px-5 py-3 font-medium">En retard</th>
-                <th className="px-5 py-3 font-medium">Risques ouverts</th>
-                <th className="px-5 py-3 font-medium">Dépendances</th>
+                <th className="px-5 py-3 font-semibold">Roadmap</th>
+                <th className="px-5 py-3 font-semibold">Santé</th>
+                <th className="px-5 py-3 font-semibold">Items</th>
+                <th className="px-5 py-3 font-semibold">En retard</th>
+                <th className="px-5 py-3 font-semibold">Risques ouverts</th>
+                <th className="px-5 py-3 font-semibold">Dépendances</th>
+                <th className="px-5 py-3 font-semibold">Jira</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -233,6 +241,17 @@ export function ConsolidatedView({
                     <td className="px-5 py-3.5 text-ink-muted">{lateCount}</td>
                     <td className="px-5 py-3.5 text-ink-muted">{stats?.openRisksCount ?? 0}</td>
                     <td className="px-5 py-3.5 text-ink-muted">{stats?.dependencyCount ?? 0}</td>
+                    <td className="px-5 py-3.5 text-ink-muted">
+                      {roadmap.jiraProjectKey ? (
+                        roadmap.jiraLastSyncAt ? (
+                          formatDistanceToNow(new Date(roadmap.jiraLastSyncAt), { addSuffix: true, locale: fr })
+                        ) : (
+                          "Jamais synchronisé"
+                        )
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                   </tr>
                 );
               })}

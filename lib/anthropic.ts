@@ -1,5 +1,15 @@
+import { ProxyAgent, fetch as undiciFetch } from "undici";
+
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
+
+// Meme souci reseau que pour Jira (voir lib/jira.ts) : le fetch global de Node ignore le
+// proxy PAC/WinINet detecte par Windows. On reutilise la meme variable d'environnement
+// JIRA_HTTP_PROXY (c'est le meme proxy d'entreprise, pas specifique a Jira malgre le nom).
+function getDispatcher() {
+  const proxyUrl = process.env.JIRA_HTTP_PROXY;
+  return proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+}
 
 export type HierarchyMapping = {
   typeColumn: number | null;
@@ -46,13 +56,14 @@ async function callClaude(prompt: string): Promise<string> {
     throw new Error("ANTHROPIC_API_KEY manquante : ajoute ta cle dans le fichier .env.");
   }
 
-  const res = await fetch(ANTHROPIC_API_URL, {
+  const res = await undiciFetch(ANTHROPIC_API_URL, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     },
+    dispatcher: getDispatcher(),
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 1500,
@@ -224,13 +235,14 @@ async function callClaudeVision(prompt: string, base64Data: string, mediaType: s
     throw new Error("ANTHROPIC_API_KEY manquante : ajoute ta cle dans le fichier .env.");
   }
 
-  const res = await fetch(ANTHROPIC_API_URL, {
+  const res = await undiciFetch(ANTHROPIC_API_URL, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     },
+    dispatcher: getDispatcher(),
     body: JSON.stringify({
       model: MODEL,
       max_tokens: VISION_MAX_TOKENS,

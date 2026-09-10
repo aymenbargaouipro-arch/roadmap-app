@@ -38,6 +38,14 @@ model Workspace {
   sprintDurationWeeks   Int?
   sprintReferenceNumber Int?
 
+  // Connexion Jira Cloud (optionnelle). Le token est chiffre (voir lib/crypto.ts) avant
+  // stockage, jamais renvoye en clair au client. jiraConnectedAt sert juste a afficher
+  // "connecte depuis le ..." sans avoir a dechiffrer/tester a chaque affichage de la page.
+  jiraSiteUrl          String?
+  jiraEmail            String?
+  jiraApiTokenEncrypted String?
+  jiraConnectedAt      DateTime?
+
   memberships Membership[]
   roadmaps    Roadmap[]
   invites     Invite[]
@@ -88,6 +96,24 @@ model Roadmap {
   icon    String?
   logoUrl String?
 
+  // Lien Jira (optionnel) : une roadmap peut etre synchronisee depuis un projet Jira.
+  // Les IDs de champs custom (dates) sont choisis par l'admin au moment du mapping
+  // (Bloc J2), car ils varient d'une instance Jira a l'autre.
+  jiraProjectKey        String?
+  jiraStartDateFieldId  String?
+  jiraEndDateFieldId    String?
+  // Type du champ Jira ("date" ou "datetime"), determine le format d'ecriture lors du
+  // renvoi des dates vers Jira (write-back). Renseigne automatiquement a l'enregistrement
+  // du mapping (voir route jira-mapping), pas de saisie manuelle.
+  jiraStartDateFieldType String?
+  jiraEndDateFieldType   String?
+  // Ne synchronise que les issues dont la date de debut mappee est posterieure ou egale a
+  // cette date (evite de remonter tout l'historique clos d'un vieux projet Jira). Null =
+  // pas de limite, comportement precedent. Traite comme "hors perimetre" exactement comme
+  // les dates manquantes : masque si deja importe, ignore sinon (voir lib/jira-sync.ts).
+  jiraSyncFromDate DateTime?
+  jiraLastSyncAt        DateTime?
+
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   workspaceId String
 
@@ -124,6 +150,18 @@ model Item {
   // avant validation.
   plannedStartDate DateTime?
   plannedEndDate   DateTime?
+
+  // Cle de l'issue Jira d'origine (ex: "ROCK-42"), unique quand presente. Sert de cle
+  // d'upsert lors d'une synchronisation : un item deja importe est mis a jour plutot que
+  // duplique. Null pour les items crees a la main dans l'app.
+  jiraIssueKey String? @unique
+
+  // Renseigne quand un item importe depuis Jira ne doit plus apparaitre dans les vues
+  // (Gantt, tableau) : soit l'issue Jira a ete supprimee/deplacee hors du projet, soit
+  // elle existe toujours mais un des deux champs de date mappes est vide. L'item reste en
+  // base (jamais supprime automatiquement) et reapparait des que la synchro retrouve des
+  // dates valides. Null = visible normalement.
+  jiraHiddenAt DateTime?
 
   roadmap    Roadmap       @relation(fields: [roadmapId], references: [id])
   roadmapId  String
@@ -252,6 +290,11 @@ model Dependency {
   targetRoadmapId String?
 
   externalSystemName String?
+
+  // Cle du lien Jira d'origine (issuelinks[].id), utilisee comme cle d'upsert pour ne
+  // jamais dupliquer une dependance importee a chaque synchro. Null pour les dependances
+  // creees a la main dans l'app.
+  jiraLinkId String? @unique
 }
 
 // ---------- Risques ----------

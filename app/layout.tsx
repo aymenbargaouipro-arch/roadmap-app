@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
+// Police Inter auto-hebergee (fichier variable woff2) au lieu de next/font/google, qui
+// necessite de joindre Google Fonts au demarrage. Sur un reseau d'entreprise ou ce trafic
+// est bloque (voir le souci de proxy PAC rencontre avec Jira), le telechargement echouait
+// et Next basculait silencieusement sur une police de secours.
+const inter = localFont({
+  src: "./fonts/InterVariable.woff2",
   variable: "--font-inter",
+  weight: "100 900",
   display: "swap",
 });
 
