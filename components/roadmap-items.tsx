@@ -240,13 +240,13 @@ export function RoadmapItems({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-ink-muted">
-                <th className="px-5 py-3 font-medium">Tâche</th>
-                <th className="px-5 py-3 font-medium">Dates</th>
-                <th className="px-5 py-3 font-medium">Owner</th>
-                <th className="px-5 py-3 font-medium">Avancement</th>
-                <th className="px-5 py-3 font-medium">Statut</th>
-                <th className="px-5 py-3 font-medium">Dépendances</th>
-                <th className="px-5 py-3 font-medium"></th>
+                <th className="px-5 py-3 font-semibold">Tâche</th>
+                <th className="px-5 py-3 font-semibold">Dates</th>
+                <th className="px-5 py-3 font-semibold">Owner</th>
+                <th className="px-5 py-3 font-semibold">Avancement</th>
+                <th className="px-5 py-3 font-semibold">Statut</th>
+                <th className="px-5 py-3 font-semibold">Dépendances</th>
+                <th className="px-5 py-3 font-semibold"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -582,7 +582,7 @@ function DependencyCell({
           <span
             key={dep.id}
             title={dep.note ?? undefined}
-            className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium", colorClasses)}
+            className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold", colorClasses)}
           >
             {icon}
             {label}

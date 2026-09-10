@@ -10,7 +10,7 @@ export function HealthTrendChart({
   if (points.length < 2) {
     return (
       <div className="flex h-full flex-col rounded-lg border border-border bg-surface p-4">
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
           Tendance santé
         </p>
         <div className="flex flex-1 items-center justify-center py-8 text-center text-xs text-ink-muted">
@@ -34,7 +34,7 @@ export function HealthTrendChart({
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-border bg-surface p-4">
-      <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-ink-muted">Tendance santé</p>
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Tendance santé</p>
       <svg
         viewBox={`0 0 ${width} ${totalHeight}`}
         className="w-full"

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ShieldAlert } from "lucide-react";
 import { WorkspaceSettingsForm } from "@/components/workspace-settings-form";
+import { JiraSettingsForm } from "@/components/jira-settings-form";
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
@@ -39,6 +40,9 @@ export default async function SettingsPage() {
       sprintReferenceDate: true,
       sprintDurationWeeks: true,
       sprintReferenceNumber: true,
+      jiraSiteUrl: true,
+      jiraEmail: true,
+      jiraConnectedAt: true,
     },
   });
 
@@ -69,6 +73,19 @@ export default async function SettingsPage() {
           referenceDate: sprintReferenceDateStr,
           durationWeeks: workspace?.sprintDurationWeeks ?? null,
           referenceNumber: workspace?.sprintReferenceNumber ?? null,
+        }}
+      />
+
+      <div className="mt-2 flex flex-col gap-1 border-t border-border pt-6">
+        <h2 className="text-lg font-semibold text-ink">Intégrations</h2>
+        <p className="text-sm text-ink-muted">Connecte des outils externes pour synchroniser tes roadmaps.</p>
+      </div>
+
+      <JiraSettingsForm
+        initial={{
+          siteUrl: workspace?.jiraSiteUrl ?? null,
+          email: workspace?.jiraEmail ?? null,
+          connectedAt: workspace?.jiraConnectedAt ? workspace.jiraConnectedAt.toISOString() : null,
         }}
       />
     </div>

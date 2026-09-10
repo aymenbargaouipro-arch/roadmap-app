@@ -194,13 +194,13 @@ export function DependencyTableModal({ items, workspaceItems, onClose, onChanged
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-border bg-background/40 text-ink-muted">
-                  {isMerged && <th className="px-3 py-2 font-medium">Depuis</th>}
-                  <th className="px-3 py-2 font-medium">Type</th>
-                  <th className="px-3 py-2 font-medium">Sens</th>
-                  <th className="px-3 py-2 font-medium">Cible</th>
-                  <th className="px-3 py-2 font-medium">Statut</th>
-                  <th className="px-3 py-2 font-medium">Note</th>
-                  <th className="px-3 py-2 font-medium"></th>
+                  {isMerged && <th className="px-3 py-2 font-semibold">Depuis</th>}
+                  <th className="px-3 py-2 font-semibold">Type</th>
+                  <th className="px-3 py-2 font-semibold">Sens</th>
+                  <th className="px-3 py-2 font-semibold">Cible</th>
+                  <th className="px-3 py-2 font-semibold">Statut</th>
+                  <th className="px-3 py-2 font-semibold">Note</th>
+                  <th className="px-3 py-2 font-semibold"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -235,7 +235,7 @@ export function DependencyTableModal({ items, workspaceItems, onClose, onChanged
                             : undefined
                         }
                         className={cn(
-                          "rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50",
+                          "rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50",
                           row.status === "RESOLVED"
                             ? "bg-status-done/15 text-status-done hover:bg-status-done/25"
                             : "bg-status-blocked/15 text-status-blocked hover:bg-status-blocked/25"

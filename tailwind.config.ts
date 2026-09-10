@@ -15,7 +15,10 @@ const config: Config = {
       colors: {
         background: "hsl(var(--background))",
         surface: "hsl(var(--surface))",
-        border: "hsl(var(--border))",
+        border: {
+          DEFAULT: "hsl(var(--border))",
+          strong: "hsl(var(--border-strong))",
+        },
         ink: {
           DEFAULT: "hsl(var(--ink))",
           muted: "hsl(var(--ink-muted))",

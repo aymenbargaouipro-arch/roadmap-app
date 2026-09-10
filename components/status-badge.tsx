@@ -18,7 +18,7 @@ export function ItemStatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
         ITEM_STATUS_COLORS[status]
       )}
     >
@@ -42,7 +42,7 @@ export function RiskLevelBadge({ level }: { level: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
         colors[level]
       )}
     >
@@ -61,7 +61,7 @@ export function HealthBadge({ health }: { health: "green" | "orange" | "red" }) 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold",
         config.classes
       )}
     >

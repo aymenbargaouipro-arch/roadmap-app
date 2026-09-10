@@ -36,6 +36,7 @@ export default async function ConsolidatedPage() {
     orderBy: { position: "asc" },
     include: {
       items: {
+        where: { jiraHiddenAt: null },
         orderBy: { position: "asc" },
         include: { _count: { select: { blockedBy: true, blocking: true } } },
       },
@@ -117,6 +118,8 @@ export default async function ConsolidatedPage() {
           color: r.color,
           icon: r.icon,
           logoUrl: r.logoUrl,
+          jiraProjectKey: r.jiraProjectKey,
+          jiraLastSyncAt: r.jiraLastSyncAt ? r.jiraLastSyncAt.toISOString() : null,
           items: r.items.map((i) => ({
             id: i.id,
             title: i.title,

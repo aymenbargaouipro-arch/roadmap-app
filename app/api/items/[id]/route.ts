@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recomputeEpicAggregates } from "@/lib/item-hierarchy";
+import { syncItemDatesToJira } from "@/lib/jira-writeback";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -130,16 +131,31 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     },
   });
 
+  // Renvoie les nouvelles dates vers Jira si cet item lui-meme a ete importe depuis Jira
+  // et que ses dates viennent de changer (edition manuelle ou drag & drop sur le Gantt).
+  // No-op silencieux si l'item n'est pas lie a Jira. Un echec ne fait jamais annuler le
+  // changement local : on le remonte juste dans la reponse pour affichage cote client.
+  let jiraWriteback: { ok: boolean; error?: string } | null = null;
+  if (data.startDate !== undefined || data.endDate !== undefined) {
+    const wb = await syncItemDatesToJira(params.id);
+    if (wb.attempted) jiraWriteback = wb.ok ? { ok: true } : { ok: false, error: wb.error };
+  }
+
   // Recalcule l'Epic parent concerné (nouveau et/ou ancien si l'item a change de rattachement,
   // ou si ses propres dates/avancement ont change alors qu'il est deja un sous-item)
   const parentsToRecompute = new Set<string>();
   if (item.parentId) parentsToRecompute.add(item.parentId);
   if (oldParentId && oldParentId !== item.parentId) parentsToRecompute.add(oldParentId);
   for (const pid of parentsToRecompute) {
-    await recomputeEpicAggregates(pid);
+    const wb = await recomputeEpicAggregates(pid);
+    if (wb.attempted && !wb.ok && !jiraWriteback) {
+      // Priorite au premier echec rencontre (celui de l'item lui-meme, deja capture ci-dessus,
+      // passe toujours en premier ; celui-ci ne comble que le cas ou seul l'Epic a echoue).
+      jiraWriteback = { ok: false, error: wb.error };
+    }
   }
 
-  return NextResponse.json(item);
+  return NextResponse.json({ ...item, jiraWriteback });
 }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {

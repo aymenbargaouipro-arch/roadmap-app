@@ -54,9 +54,9 @@ export function RoadmapMilestones({ roadmapId, milestones }: { roadmapId: string
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-ink-muted">
-                <th className="px-5 py-3 font-medium">Titre</th>
-                <th className="px-5 py-3 font-medium">Date</th>
-                <th className="px-5 py-3 font-medium"></th>
+                <th className="px-5 py-3 font-semibold">Titre</th>
+                <th className="px-5 py-3 font-semibold">Date</th>
+                <th className="px-5 py-3 font-semibold"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
