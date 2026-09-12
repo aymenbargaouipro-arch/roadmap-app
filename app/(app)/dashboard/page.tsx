@@ -178,6 +178,7 @@ export default async function DashboardPage() {
                 color={roadmap.color}
                 icon={roadmap.icon}
                 logoUrl={roadmap.logoUrl}
+                isAdmin={membership.role === "ADMIN"}
               />
             ))}
           </div>

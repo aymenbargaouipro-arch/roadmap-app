@@ -72,3 +72,52 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   return NextResponse.json({ roadmap: updated });
 }
+
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+
+  const roadmap = await prisma.roadmap.findUnique({
+    where: { id: params.id },
+    select: { workspaceId: true },
+  });
+  if (!roadmap) return NextResponse.json({ error: "Roadmap introuvable." }, { status: 404 });
+
+  const membership = await prisma.membership.findFirst({
+    where: { userId: session.user.id, workspaceId: roadmap.workspaceId },
+  });
+  if (!membership) return NextResponse.json({ error: "Accès refusé." }, { status: 403 });
+  if (membership.role !== "ADMIN") {
+    return NextResponse.json({ error: "Seul un administrateur peut supprimer une roadmap." }, { status: 403 });
+  }
+
+  // Pas de onDelete: Cascade dans le schema : on supprime nous-memes dans l'ordre qui respecte
+  // les contraintes de cle etrangere (dependants des Item d'abord, puis les Item eux-memes,
+  // puis les dependants de la Roadmap, puis la Roadmap). Les Dependency inter-equipes (dont
+  // un cote seulement appartient a cette roadmap, ou qui la ciblent via targetRoadmapId) sont
+  // incluses pour ne jamais laisser de reference orpheline.
+  const itemIds = (
+    await prisma.item.findMany({ where: { roadmapId: params.id }, select: { id: true } })
+  ).map((i) => i.id);
+
+  await prisma.$transaction([
+    prisma.itemDateShift.deleteMany({ where: { itemId: { in: itemIds } } }),
+    prisma.statusHistory.deleteMany({ where: { itemId: { in: itemIds } } }),
+    prisma.dependency.deleteMany({
+      where: {
+        OR: [
+          { blockingItemId: { in: itemIds } },
+          { blockedItemId: { in: itemIds } },
+          { targetRoadmapId: params.id },
+        ],
+      },
+    }),
+    prisma.item.deleteMany({ where: { roadmapId: params.id } }),
+    prisma.milestone.deleteMany({ where: { roadmapId: params.id } }),
+    prisma.risk.deleteMany({ where: { roadmapId: params.id } }),
+    prisma.healthSnapshot.deleteMany({ where: { roadmapId: params.id } }),
+    prisma.roadmap.delete({ where: { id: params.id } }),
+  ]);
+
+  return NextResponse.json({ success: true });
+}

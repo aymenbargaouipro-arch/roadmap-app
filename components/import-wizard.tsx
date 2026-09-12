@@ -380,14 +380,14 @@ export function ImportWizard({ roadmaps, members }: { roadmaps: RoadmapOption[];
                             type="date"
                             value={item.startDate ?? ""}
                             onChange={(e) => updateItem(index, { startDate: e.target.value || null })}
-                            className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink"
+                            className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-70"
                           />
                           <span className="text-ink-muted">→</span>
                           <input
                             type="date"
                             value={item.endDate ?? ""}
                             onChange={(e) => updateItem(index, { endDate: e.target.value || null })}
-                            className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink"
+                            className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-70"
                           />
                         </div>
                       </td>
@@ -483,7 +483,7 @@ export function ImportWizard({ roadmaps, members }: { roadmaps: RoadmapOption[];
                       prev.map((mm, i) => (i === index ? { ...mm, date: e.target.value || null } : mm))
                     )
                   }
-                  className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink"
+                  className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-70"
                 />
                 <button
                   onClick={() => removeMilestone(index)}

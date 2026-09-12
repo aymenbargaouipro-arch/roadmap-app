@@ -40,7 +40,7 @@ export function Sidebar({ workspaceName, isAdmin }: { workspaceName: string; isA
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/atlas-logo.png" alt="" className="h-7 w-7 shrink-0 rounded-lg" />
-        {!collapsed && <span className="truncate text-base font-semibold text-ink">Atlas</span>}
+        {!collapsed && <span className="truncate text-base font-semibold text-ink">Apex</span>}
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 p-3">

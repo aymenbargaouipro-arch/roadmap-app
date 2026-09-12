@@ -7,6 +7,8 @@ import { getWorkspaceHealthThresholds } from "@/lib/health-thresholds";
 import { DEFAULT_ROADMAP_COLOR, withAlpha } from "@/lib/roadmap-theme";
 import { HealthBadge } from "@/components/status-badge";
 import { RoadmapSettingsModal } from "@/components/roadmap-settings-modal";
+import { RoadmapDeleteButton } from "@/components/roadmap-delete-button";
+import { RoadmapExportButton } from "@/components/roadmap-export-button";
 import { JiraSyncButton } from "@/components/jira-sync-button";
 import { GanttChart } from "@/components/gantt-chart";
 import { RoadmapItems } from "@/components/roadmap-items";
@@ -164,8 +166,11 @@ export default async function RoadmapDetailPage({ params }: { params: { id: stri
           </span>
           <h1 className="text-xl font-semibold text-ink">{roadmap.name}</h1>
           <HealthBadge health={health} />
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <RoadmapExportButton roadmapId={roadmap.id} roadmapName={roadmap.name} />
             {roadmap.jiraProjectKey && <JiraSyncButton roadmapId={roadmap.id} />}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
             <RoadmapSettingsModal
               roadmapId={roadmap.id}
               initial={{
@@ -176,6 +181,9 @@ export default async function RoadmapDetailPage({ params }: { params: { id: stri
                 logoUrl: roadmap.logoUrl,
               }}
             />
+            {membership.role === "ADMIN" && (
+              <RoadmapDeleteButton roadmapId={roadmap.id} roadmapName={roadmap.name} variant="icon" />
+            )}
           </div>
         </div>
         {roadmap.description && <p className="mt-1 text-sm text-ink-muted">{roadmap.description}</p>}
