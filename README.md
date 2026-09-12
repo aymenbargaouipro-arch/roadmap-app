@@ -1,7 +1,5 @@
 # Apex - Roadmaps multi-équipes
 
-App de pilotage de roadmaps multi-équipes (démo interne CRIT Innovation). Tourne en local sur ta machine, 0€ de coût.
-
 ## Fonctionnalités en place
 
 ### Authentification & espace de travail
