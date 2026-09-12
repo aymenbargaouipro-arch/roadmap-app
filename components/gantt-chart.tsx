@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { GripVertical, Flag, Link2, Flame, ChevronRight, ChevronDown, CornerDownRight } from "lucide-react";
+import { GripVertical, Flag, Link2, Flame, ChevronRight, ChevronDown, CornerDownRight, Eye, EyeOff } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -131,6 +131,7 @@ export function GanttChart({
   const [curveDrag, setCurveDrag] = useState<CurveDrag>(null);
   const [pendingCurveSave, setPendingCurveSave] = useState<CurveDrag>(null);
   const [collapsedEpics, setCollapsedEpics] = useState<Set<string>>(new Set());
+  const [showDependencies, setShowDependencies] = useState(true);
   const curveDragMetaRef = useRef<{ mx: number; my: number; dist: number } | null>(null);
   const rowsWrapperRef = useRef<HTMLDivElement>(null);
   const linkStartPos = useRef<{ x: number; y: number } | null>(null);
@@ -527,14 +528,6 @@ export function GanttChart({
     router.refresh();
   }
 
-  if (items.length === 0) {
-    return (
-      <div className="rounded-lg border border-border bg-surface px-5 py-10 text-center text-sm text-ink-muted">
-        Ajoutez des items pour voir la vue Gantt.
-      </div>
-    );
-  }
-
   // Graduations de l'en-tete, calculees differemment selon le niveau de zoom :
   // - "week" : pas fixe de 7 jours, avec l'alignement sur la date de reference du sprint
   //   deja en place (l'alignement calendaire n'a pas de sens pour mois/trimestre, qui se
@@ -564,6 +557,18 @@ export function GanttChart({
     return computeCalendarTicks("quarter", range.start, range.end, (d) => `T${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`);
   }, [zoomLevel, range, totalDays, sprintConfig]);
 
+  // Garde placee APRES tous les hooks (useState/useMemo/useEffect) du composant : la placer
+  // plus haut casserait l'ordre des hooks entre un rendu avec items et un rendu sans item
+  // (erreur React "Rendered fewer hooks than expected"), ce qui plantait l'app des qu'on
+  // supprimait le dernier item d'une roadmap.
+  if (items.length === 0) {
+    return (
+      <div className="rounded-lg border border-border bg-surface px-5 py-10 text-center text-sm text-ink-muted">
+        Ajoutez des items pour voir la vue Gantt.
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
@@ -584,6 +589,18 @@ export function GanttChart({
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => setShowDependencies((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-semibold transition-colors",
+              showDependencies ? "text-ink-muted hover:text-ink" : "bg-accent/15 text-accent"
+            )}
+            title={showDependencies ? "Masquer les dépendances" : "Afficher les dépendances"}
+          >
+            {showDependencies ? <Eye size={13} /> : <EyeOff size={13} />}
+            Dépendances
+          </button>
         </div>
         <p className="text-[11px] text-ink-muted">
           Cliquer ou glisser le point à droite d&apos;une barre pour créer une dépendance · double-clic pour un jalon
@@ -790,7 +807,7 @@ export function GanttChart({
                     <path d="M0,0 L6,3 L0,6 Z" className="fill-accent" />
                   </marker>
                 </defs>
-                {arrows.map((a) => {
+                {showDependencies && arrows.map((a) => {
                   const isActive = curveDrag?.id === a.id || pendingCurveSave?.id === a.id;
                   return (
                     <g key={a.key} className="group">

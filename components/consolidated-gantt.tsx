@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Link2, ChevronRight, ChevronDown, CornerDownRight } from "lucide-react";
+import { Link2, ChevronRight, ChevronDown, CornerDownRight, Eye, EyeOff } from "lucide-react";
 import { addDays, computeTimelineRange, diffInDays, startOfDay, computeCalendarTicks, type ZoomLevel } from "@/lib/gantt";
 import { computeSprintBands, type SprintBand } from "@/lib/sprints";
 import { cn } from "@/lib/utils";
@@ -108,6 +108,7 @@ export function ConsolidatedGantt({
     }
     return parentIds;
   });
+  const [showDependencies, setShowDependencies] = useState(true);
   const curveDragMetaRef = useRef<{ mx: number; my: number; dist: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const linkStartPos = useRef<{ x: number; y: number } | null>(null);
@@ -533,6 +534,18 @@ export function ConsolidatedGantt({
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => setShowDependencies((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-semibold transition-colors",
+              showDependencies ? "text-ink-muted hover:text-ink" : "bg-accent/15 text-accent"
+            )}
+            title={showDependencies ? "Masquer les dépendances" : "Afficher les dépendances"}
+          >
+            {showDependencies ? <Eye size={13} /> : <EyeOff size={13} />}
+            Dépendances
+          </button>
         </div>
         <p className="text-[11px] text-ink-muted">
           Cliquer ou glisser le point d&apos;une barre pour créer une dépendance · double-clic sur une ligne pour un
@@ -705,7 +718,7 @@ export function ConsolidatedGantt({
                   <path d="M0,0 L6,3 L0,6 Z" className="fill-accent" />
                 </marker>
               </defs>
-              {arrows.map((a) => {
+              {showDependencies && arrows.map((a) => {
                 const isActive = curveDrag?.id === a.id || pendingCurveSave?.id === a.id;
                 return (
                   <g key={a.key} className="group">

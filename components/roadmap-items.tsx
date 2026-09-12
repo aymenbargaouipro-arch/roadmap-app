@@ -13,14 +13,12 @@ import {
   Plus,
   Trash2,
   Link2,
-  Users,
-  Globe2,
   User,
-  X,
   ChevronRight,
   ChevronDown,
   CornerDownRight,
   History,
+  MoreVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_ROADMAP_COLOR, withAlpha } from "@/lib/roadmap-theme";
@@ -54,6 +52,24 @@ type Item = {
 };
 
 type Member = { id: string; name: string };
+
+// Libelle textuel complet d'une dependance, reutilise par la cellule (tooltip du compteur) et
+// le tableau des dependances plus bas sur la page.
+function depLabel(dep: Dependency & { sourceTitle?: string }, roadmapId: string): string {
+  let label = "Cible supprimée";
+  if (dep.targetKind === "ITEM" && dep.blockingItem) {
+    label = `Bloqué par : ${dep.blockingItem.title}`;
+    if (dep.blockingItem.roadmap.id !== roadmapId) {
+      label += ` (${dep.blockingItem.roadmap.name})`;
+    }
+  } else if (dep.targetKind === "TEAM" && dep.targetRoadmap) {
+    label = `Équipe : ${dep.targetRoadmap.name}`;
+  } else if (dep.targetKind === "EXTERNAL" && dep.externalSystemName) {
+    label = `Externe : ${dep.externalSystemName}`;
+  }
+  if (dep.sourceTitle) label = `${dep.sourceTitle} · ${label}`;
+  return label;
+}
 
 const STATUSES = [
   { value: "TODO", label: "À faire", dot: "bg-status-todo" },
@@ -204,20 +220,6 @@ export function RoadmapItems({
     router.refresh();
   }
 
-  async function handleRemoveDependency(dependencyId: string) {
-    try {
-      const res = await fetch(`/api/dependencies/${dependencyId}`, { method: "DELETE" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(data.error ?? `Erreur ${res.status} lors de la suppression.`);
-        return;
-      }
-      router.refresh();
-    } catch {
-      alert("Erreur réseau lors de la suppression de la dépendance.");
-    }
-  }
-
   return (
     <div className="rounded-lg border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
@@ -246,6 +248,7 @@ export function RoadmapItems({
                 <th className="px-5 py-3 font-semibold">Avancement</th>
                 <th className="px-5 py-3 font-semibold">Statut</th>
                 <th className="px-5 py-3 font-semibold">Dépendances</th>
+                <th className="px-5 py-3 font-semibold">Suivi</th>
                 <th className="px-5 py-3 font-semibold"></th>
               </tr>
             </thead>
@@ -253,6 +256,21 @@ export function RoadmapItems({
               {visibleRows.map(({ item, depth, isEpic }) => {
                 const availableEpicTargets = items.filter((i) => !i.parentId && i.id !== item.id);
                 const parentTitle = item.parentId ? items.find((i) => i.id === item.parentId)?.title : null;
+
+                // Dependances effectivement affichees pour cette ligne : celles de l'item lui-meme,
+                // ou - pour une Epic repliee - celles de l'item + de tous ses sous-items masques
+                // (fusionnees, avec sourceTitle pour les distinguer). Une Epic depliee n'affiche rien
+                // ici (chaque sous-item montre les siennes sur sa propre ligne).
+                const rowDependencies: (Dependency & { sourceTitle?: string })[] = isEpic
+                  ? collapsed.has(item.id)
+                    ? [
+                        ...item.blockedBy,
+                        ...rows
+                          .filter((r) => r.item.parentId === item.id)
+                          .flatMap((r) => r.item.blockedBy.map((d) => ({ ...d, sourceTitle: r.item.title }))),
+                      ]
+                    : []
+                  : item.blockedBy;
 
                 return (
                   <tr
@@ -323,34 +341,6 @@ export function RoadmapItems({
                                 ))}
                               </select>
                             </div>
-                          )}
-
-                          {!isEpic && (
-                            <button
-                              type="button"
-                              onClick={() => setDependencyModalItem(item)}
-                              className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-accent"
-                            >
-                              <Link2 size={10} />
-                              Ajouter une dépendance
-                            </button>
-                          )}
-
-                          {!isEpic && (item.plannedStartDate || item.plannedEndDate || item.dateShifts.length > 0) && (
-                            <button
-                              type="button"
-                              onClick={() => setDateShiftModalItem(item)}
-                              className={cn(
-                                "mt-1.5 ml-3 inline-flex items-center gap-1 text-[11px] font-medium",
-                                item.plannedStartDate || item.plannedEndDate
-                                  ? "text-status-progress hover:text-status-progress"
-                                  : "text-ink-muted hover:text-accent"
-                              )}
-                              title="Prévu vs réel"
-                            >
-                              <History size={10} />
-                              {item.plannedStartDate || item.plannedEndDate ? "Décalage" : "Historique"}
-                            </button>
                           )}
                         </div>
                       </div>
@@ -433,25 +423,25 @@ export function RoadmapItems({
                     </td>
 
                     <td className="px-5 py-3.5">
-                      {isEpic ? (
-                        collapsed.has(item.id) ? (
-                          <DependencyCell
-                            dependencies={[
-                              ...item.blockedBy,
-                              ...(rows
-                                .filter((r) => r.item.parentId === item.id)
-                                .flatMap((r) =>
-                                  r.item.blockedBy.map((d) => ({ ...d, sourceTitle: r.item.title }))
-                                )),
-                            ]}
-                            roadmapId={roadmapId}
-                            onRemove={handleRemoveDependency}
-                          />
-                        ) : (
-                          <span className="text-xs text-ink-muted">-</span>
-                        )
-                      ) : (
-                        <DependencyCell dependencies={item.blockedBy} roadmapId={roadmapId} onRemove={handleRemoveDependency} />
+                      <DependencyCell dependencies={rowDependencies} roadmapId={roadmapId} />
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      {!isEpic && (item.plannedStartDate || item.plannedEndDate || item.dateShifts.length > 0) && (
+                        <button
+                          type="button"
+                          onClick={() => setDateShiftModalItem(item)}
+                          className={cn(
+                            "inline-flex items-center gap-1 text-[11px] font-medium",
+                            item.plannedStartDate || item.plannedEndDate
+                              ? "text-status-progress hover:text-status-progress"
+                              : "text-ink-muted hover:text-accent"
+                          )}
+                          title="Prévu vs réel"
+                        >
+                          <History size={10} />
+                          {item.plannedStartDate || item.plannedEndDate ? "Décalage" : "Historique"}
+                        </button>
                       )}
                     </td>
 
@@ -468,13 +458,11 @@ export function RoadmapItems({
                             <Plus size={14} />
                           </button>
                         )}
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-danger/10 hover:text-danger"
-                          aria-label="Supprimer l'item"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <ItemActionsMenu
+                          showAddDependency={!isEpic}
+                          onAddDependency={() => setDependencyModalItem(item)}
+                          onDeleteItem={() => handleDelete(item.id)}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -544,58 +532,77 @@ export function RoadmapItems({
 function DependencyCell({
   dependencies,
   roadmapId,
-  onRemove,
 }: {
   dependencies: (Dependency & { sourceTitle?: string })[];
   roadmapId: string;
-  onRemove: (dependencyId: string) => void;
 }) {
   if (dependencies.length === 0) return <span className="text-xs text-ink-muted">-</span>;
 
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {dependencies.map((dep) => {
-        const isResolved = dep.status === "RESOLVED";
-        const colorClasses = isResolved
-          ? "bg-status-done/15 text-status-done"
-          : "bg-status-blocked/15 text-status-blocked";
-        const hoverClasses = isResolved ? "hover:bg-status-done/25" : "hover:bg-status-blocked/25";
+    <span
+      title={dependencies.map((d) => depLabel(d, roadmapId)).join("\n")}
+      className="inline-flex cursor-help items-center gap-1 rounded-full bg-status-blocked/15 px-2 py-0.5 text-[11px] font-semibold text-status-blocked"
+    >
+      <Link2 size={10} />
+      {dependencies.length}
+    </span>
+  );
+}
 
-        let icon = <Link2 size={10} />;
-        let label = "Cible supprimée";
-        if (dep.targetKind === "ITEM" && dep.blockingItem) {
-          label = `Bloqué par : ${dep.blockingItem.title}`;
-          if (dep.blockingItem.roadmap.id !== roadmapId) {
-            label += ` (${dep.blockingItem.roadmap.name})`;
-          }
-        } else if (dep.targetKind === "TEAM" && dep.targetRoadmap) {
-          icon = <Users size={10} />;
-          label = `Équipe : ${dep.targetRoadmap.name}`;
-        } else if (dep.targetKind === "EXTERNAL" && dep.externalSystemName) {
-          icon = <Globe2 size={10} />;
-          label = `Externe : ${dep.externalSystemName}`;
-        }
+function ItemActionsMenu({
+  showAddDependency,
+  onAddDependency,
+  onDeleteItem,
+}: {
+  showAddDependency: boolean;
+  onAddDependency: () => void;
+  onDeleteItem: () => void;
+}) {
+  const [open, setOpen] = useState(false);
 
-        if (dep.sourceTitle) label = `${dep.sourceTitle} · ${label}`;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-accent/10 hover:text-accent"
+        aria-label="Actions"
+        title="Actions"
+      >
+        <MoreVertical size={14} />
+      </button>
 
-        return (
-          <span
-            key={dep.id}
-            title={dep.note ?? undefined}
-            className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold", colorClasses)}
-          >
-            {icon}
-            {label}
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border border-border bg-surface p-1 text-left shadow-lg">
+            {showAddDependency && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onAddDependency();
+                }}
+                className="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs text-ink hover:bg-background"
+              >
+                <Link2 size={12} />
+                Ajouter une dépendance
+              </button>
+            )}
             <button
-              onClick={() => onRemove(dep.id)}
-              className={cn("ml-0.5 rounded-full", hoverClasses)}
-              aria-label="Retirer la dépendance"
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onDeleteItem();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs text-danger hover:bg-danger/10"
             >
-              <X size={10} />
+              <Trash2 size={12} />
+              Supprimer l'item
             </button>
-          </span>
-        );
-      })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -640,7 +647,7 @@ function ProgressCell({
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
-        className="w-12 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-ink"
+        className="w-14 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-ink"
         aria-label="Avancement en pourcentage"
       />
       <span className="text-xs text-ink-muted">%</span>
@@ -720,14 +727,14 @@ function EditableDateRange({
         autoFocus
         value={draftStart}
         onChange={(e) => setDraftStart(e.target.value)}
-        className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink"
+        className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-70"
       />
       <span>→</span>
       <input
         type="date"
         value={draftEnd}
         onChange={(e) => setDraftEnd(e.target.value)}
-        className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink"
+        className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-ink [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-70"
       />
     </div>
   );

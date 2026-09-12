@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Flag, TriangleAlert } from "lucide-react";
 import { HealthBadge } from "@/components/status-badge";
+import { RoadmapDeleteButton } from "@/components/roadmap-delete-button";
 import { DEFAULT_ROADMAP_COLOR, withAlpha } from "@/lib/roadmap-theme";
 import type { Health } from "@/lib/health";
 
@@ -18,6 +19,7 @@ export type RoadmapCardProps = {
   color: string | null;
   icon: string | null;
   logoUrl: string | null;
+  isAdmin?: boolean;
 };
 
 const RISK_SCORE: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
@@ -54,7 +56,18 @@ function relativeDays(date: Date): string {
   return `il y a ${days} j`;
 }
 
-export function RoadmapCard({ id, name, health, items, risks, milestones, color, icon, logoUrl }: RoadmapCardProps) {
+export function RoadmapCard({
+  id,
+  name,
+  health,
+  items,
+  risks,
+  milestones,
+  color,
+  icon,
+  logoUrl,
+  isAdmin = false,
+}: RoadmapCardProps) {
   const initials = pickInitials(name);
   const displayColor = color ?? DEFAULT_ROADMAP_COLOR;
   const avgProgress =
@@ -89,8 +102,9 @@ export function RoadmapCard({ id, name, health, items, risks, milestones, color,
             </span>
             <span className="truncate text-sm font-semibold text-ink">{name}</span>
           </div>
-          <div className="shrink-0">
+          <div className="flex shrink-0 items-center gap-1">
             <HealthBadge health={health} />
+            {isAdmin && <RoadmapDeleteButton roadmapId={id} roadmapName={name} variant="icon" />}
           </div>
         </div>
 
