@@ -1,4 +1,4 @@
-# Atlas - Roadmaps multi-équipes
+# Apex - Roadmaps multi-équipes
 
 App de pilotage de roadmaps multi-équipes (démo interne CRIT Innovation). Tourne en local sur ta machine, 0€ de coût.
 
@@ -11,6 +11,8 @@ App de pilotage de roadmaps multi-équipes (démo interne CRIT Innovation). Tour
 
 ### Roadmaps & items
 - Création de roadmap via une modale intégrée au Dashboard (titre, description, couleur, emoji/logo)
+- Suppression d'une roadmap (réservée à l'Admin), avec modale de confirmation - supprime en cascade tous ses items, jalons, risques et dépendances liées (y compris inter-équipes)
+- Export Excel par roadmap (4 feuilles : Items, Jalons, Risques, Dépendances)
 - Ajout / suppression d'items : titre, dates, statut, % avancement, owner
 - Changement de statut horodaté
 - Hiérarchie Epic / sous-item (un seul niveau) : agrégation automatique des dates et de la progression sur l'Epic, lignes repliables, suppression en cascade avec confirmation
@@ -20,6 +22,7 @@ App de pilotage de roadmaps multi-équipes (démo interne CRIT Innovation). Tour
 ### Vue Gantt
 - Drag-and-drop des dates, poignées de redimensionnement
 - Connecteurs de dépendance en courbes de Bézier avec poignée déplaçable positionnée sur la courbe
+- Bascule pour masquer/afficher les dépendances (vue individuelle et consolidée), utile quand beaucoup de flèches se croisent
 - Zoom Semaine / Mois / Trimestre avec graduations calées sur le vrai calendrier
 - Bandeau calendrier de sprints (date de référence, durée, numéro de départ configurables dans Paramètres), avec extrapolation passé/futur
 - Suivi prévu vs réel : dates planifiées vs dates réelles, extensions pointillées rouge/vert sur les barres
@@ -29,8 +32,9 @@ App de pilotage de roadmaps multi-équipes (démo interne CRIT Innovation). Tour
 - 3 types de cible : Tâche, Équipe, Système externe
 - Statut manuel (Résolue / En attente) sur chaque dépendance
 - Détection et blocage des dépendances circulaires
-- Tableau récapitulatif des dépendances par roadmap (accessible depuis le Gantt et la vue de suivi)
+- Tableau récapitulatif des dépendances par roadmap (accessible depuis le Gantt et la vue de suivi), avec suppression directe
 - Déduplication des flèches quand un Epic est replié
+- Depuis le tableau Items : ajout d'une dépendance et suppression de l'item regroupés dans un menu dédié par ligne ; le nombre de dépendances d'un item est visible d'un coup d'œil, avec le détail complet au survol
 
 ### Risques
 - Liste par roadmap : titre, impact, probabilité
@@ -39,7 +43,7 @@ App de pilotage de roadmaps multi-équipes (démo interne CRIT Innovation). Tour
 ### Dashboard & vue consolidée
 - KPIs globaux, panneau "Attention requise"
 - Graphique de tendance de santé avec infobulles par roadmap
-- Cartes roadmap enrichies (couleur, emoji/logo, statut)
+- Cartes roadmap enrichies (couleur, emoji/logo, statut), avec suppression rapide pour un Admin
 - Statut de santé auto-calculé (vert / orange / rouge), seuils configurables dans Paramètres
 - Filtres instantanés sur la vue consolidée
 - Drill-down vers le détail de chaque roadmap
@@ -60,7 +64,7 @@ App de pilotage de roadmaps multi-équipes (démo interne CRIT Innovation). Tour
 - Compatible réseau d'entreprise (proxy PAC, `undici` ProxyAgent)
 
 ### Interface & design
-- Identité "Atlas" : nom, logo (dégradé bleu)
+- Identité "Apex" : nom, logo (dégradé bleu)
 - Thème sombre uniquement, composants shadcn-style faits main
 - Sidebar réductible avec bouton flottant au survol
 - Police Inter auto-hébergée (évite les problèmes de proxy au démarrage)
@@ -141,6 +145,6 @@ npx prisma studio
 
 ## Stack technique
 
-Next.js 14 (App Router) · TypeScript · PostgreSQL · Prisma · NextAuth · Tailwind CSS · composants shadcn-style faits main · Claude Haiku (import Excel/image, via `undici` ProxyAgent) · Jira Cloud API (sync bidirectionnelle, jetons AES-256-GCM) · Docker Compose
+Next.js 14 (App Router) · TypeScript · PostgreSQL · Prisma · NextAuth · Tailwind CSS · composants shadcn-style faits main · Claude Haiku (import Excel/image, via `undici` ProxyAgent) · Jira Cloud API (sync bidirectionnelle, jetons AES-256-GCM) · Docker Compose · SheetJS (export Excel)
 
 Coût : **0€** en local. Passage sur Hetzner documenté séparément (guide de déploiement en 15 étapes).
