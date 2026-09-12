@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -559,12 +560,44 @@ function ItemActionsMenu({
   onDeleteItem: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Le menu est rendu via un portail dans <body>, pas dans le flux du tableau : le conteneur
+  // du tableau a "overflow-x-auto", et des qu'un enfant depasse verticalement, les navigateurs
+  // traitent aussi l'axe Y comme scrollable/clippe (comportement standard overflow-x/overflow-y),
+  // ce qui coupait le menu et ajoutait un scroll parasite au tableau sur les dernieres lignes.
+  function handleToggle() {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const menuWidth = 224; // w-56
+      const estimatedMenuHeight = showAddDependency ? 88 : 48;
+      const openUpward = rect.bottom + estimatedMenuHeight + 8 > window.innerHeight;
+      setPosition({
+        top: openUpward ? rect.top - estimatedMenuHeight - 4 : rect.bottom + 4,
+        left: Math.min(Math.max(8, rect.right - menuWidth), window.innerWidth - menuWidth - 8),
+      });
+    }
+    setOpen((v) => !v);
+  }
+
+  // Ferme le menu si la page ou le tableau scrolle pendant qu'il est ouvert, plutot que de le
+  // repositionner en continu (le menu est court-vecu, ce n'est pas genant pour l'usage).
+  useEffect(() => {
+    if (!open) return;
+    function handleScroll() {
+      setOpen(false);
+    }
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [open]);
 
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleToggle}
         className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-accent/10 hover:text-accent"
         aria-label="Actions"
         title="Actions"
@@ -572,37 +605,43 @@ function ItemActionsMenu({
         <MoreVertical size={14} />
       </button>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border border-border bg-surface p-1 text-left shadow-lg">
-            {showAddDependency && (
+      {open &&
+        position &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div
+              className="fixed z-50 w-56 rounded-md border border-border bg-surface p-1 text-left shadow-lg"
+              style={{ top: position.top, left: position.left }}
+            >
+              {showAddDependency && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onAddDependency();
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs text-ink hover:bg-background"
+                >
+                  <Link2 size={12} />
+                  Ajouter une dépendance
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  onAddDependency();
+                  onDeleteItem();
                 }}
-                className="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs text-ink hover:bg-background"
+                className="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs text-danger hover:bg-danger/10"
               >
-                <Link2 size={12} />
-                Ajouter une dépendance
+                <Trash2 size={12} />
+                Supprimer l'item
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onDeleteItem();
-              }}
-              className="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-xs text-danger hover:bg-danger/10"
-            >
-              <Trash2 size={12} />
-              Supprimer l'item
-            </button>
-          </div>
-        </>
-      )}
+            </div>
+          </>,
+          document.body
+        )}
     </div>
   );
 }
