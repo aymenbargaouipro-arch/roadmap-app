@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import animate from "tailwindcss-animate";
 
 const config: Config = {
   darkMode: "class",
@@ -47,7 +48,9 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  // Import ESM plutot que require : ce fichier est un module ESM (export default), et
+  // Node 24 le charge comme tel, mode dans lequel require n'existe pas.
+  plugins: [animate],
 };
 
 export default config;
