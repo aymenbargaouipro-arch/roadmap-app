@@ -6,7 +6,8 @@ import { syncRoadmapFromJira } from "@/lib/jira-sync";
 
 // Synchronisation ouverte a tous les membres du workspace (decision actee, audit I1) : un
 // membre peut deja modifier les dates d'un item, ce qui les renvoie vers Jira.
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 

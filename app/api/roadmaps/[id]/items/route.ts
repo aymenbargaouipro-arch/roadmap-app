@@ -6,7 +6,8 @@ import { recomputeEpicAggregates } from "@/lib/item-hierarchy";
 import { requireRoadmapMember } from "@/lib/access";
 import { parseDateInput } from "@/lib/validation";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 

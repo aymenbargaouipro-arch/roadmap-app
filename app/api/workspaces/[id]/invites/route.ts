@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { requireWorkspaceAdmin } from "@/lib/access";
 import { inviteDefaults, inviteState, newInviteToken } from "@/lib/invites";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
@@ -31,7 +32,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
 // Liste des invitations encore utilisables, sans leur token (un lien deja partage ne peut
 // pas etre recopie depuis cette liste, seulement revoque).
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 

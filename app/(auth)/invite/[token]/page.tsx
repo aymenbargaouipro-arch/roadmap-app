@@ -6,7 +6,8 @@ import { inviteState } from "@/lib/invites";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AcceptInviteButton } from "@/components/accept-invite-button";
 
-export default async function InvitePage({ params }: { params: { token: string } }) {
+export default async function InvitePage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const found = await prisma.invite.findUnique({
     where: { token: params.token },
     include: { workspace: { select: { name: true } } },
