@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next");
+  const next = safeNextPath(searchParams.get("next"));
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
