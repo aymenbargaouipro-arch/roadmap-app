@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -204,6 +204,10 @@ export function GanttChart({
   }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // Identifiant stable pour @dnd-kit : sans lui, la librairie numerote ses attributs
+  // d'accessibilite (aria-describedby) avec un compteur global, different entre le rendu
+  // serveur et le navigateur, ce qui declenche une erreur d'hydratation React.
+  const dndContextId = useId();
 
   const range = useMemo(
     () =>
@@ -677,7 +681,7 @@ export function GanttChart({
           </div>
 
           <div ref={rowsWrapperRef} className="relative select-none">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <DndContext id={dndContextId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={topLevelOrder} strategy={verticalListSortingStrategy}>
                 {rows.map(({ item, depth, isEpic }) =>
                   depth === 0 ? (
