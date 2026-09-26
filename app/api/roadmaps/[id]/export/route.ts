@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireRoadmapMember } from "@/lib/access";
 import * as XLSX from "xlsx";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -32,6 +33,12 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
+  // Controle d'acces centralise (audit C1, bloc 1) : 404 identique pour "roadmap inexistante"
+  // et "roadmap d'un autre espace", comme toutes les autres routes. Avant ce correctif, un
+  // non-membre recevait 403, ce qui revelait l'existence de la roadmap.
+  const access = await requireRoadmapMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
+
   const roadmap = await prisma.roadmap.findUnique({
     where: { id: params.id },
     include: {
@@ -57,12 +64,8 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
       risks: { orderBy: { createdAt: "desc" } },
     },
   });
+  // Cas limite : roadmap supprimee entre le controle d'acces et cette lecture.
   if (!roadmap) return NextResponse.json({ error: "Roadmap introuvable." }, { status: 404 });
-
-  const membership = await prisma.membership.findFirst({
-    where: { userId: session.user.id, workspaceId: roadmap.workspaceId },
-  });
-  if (!membership) return NextResponse.json({ error: "Accès refusé." }, { status: 403 });
 
   // Un item qui apparait comme parent d'au moins un autre est une Epic (dates/avancement
   // derives) ; sinon, sous-item si parentId est renseigne, item simple sinon.
