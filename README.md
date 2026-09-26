@@ -4,8 +4,9 @@
 
 ### Authentification & espace de travail
 - Inscription / connexion (NextAuth)
-- Création d'un workspace, invitation de membres par lien
-- 2 rôles : Admin / Membre
+- Création d'un workspace, invitation de membres par lien : validité 7 jours, lien Admin à usage unique, lien Membre réutilisable, révocation possible
+- La page d'invitation est accessible sans compte : la personne invitée crée son compte ou se connecte, puis rejoint directement l'espace
+- 2 rôles : Admin / Membre, avec changement de rôle et retrait d'un membre (le dernier admin est protégé)
 
 ### Roadmaps & items
 - Création de roadmap via une modale intégrée au Dashboard (titre, description, couleur, emoji/logo)
@@ -52,7 +53,7 @@
 - Logique de transformation commune aux deux imports (`lib/import-transform.ts`)
 
 ### Intégration Jira Cloud (bidirectionnelle)
-- Connexion au niveau workspace, jetons chiffrés AES-256-GCM
+- Connexion au niveau workspace, jetons chiffrés AES-256-GCM (clé dérivée par HKDF, liée au workspace, rotation de clé possible)
 - Mapping projet et champs de date par roadmap (détection date vs date-heure)
 - Synchronisation des Epics et Stories, mapping des statuts
 - Masquage (pas suppression) des items en cas de perte de dates ou de suppression côté Jira
@@ -68,10 +69,19 @@
 - Police Inter auto-hébergée (évite les problèmes de proxy au démarrage)
 - Écran Paramètres unifié : seuils de santé, calendrier de sprints, connexion Jira
 
+### Sécurité
+- Contrôle d'accès sur chaque objet : un utilisateur ne voit et ne modifie que les données de son espace (réponse 404 identique pour "inexistant" et "pas à toi")
+- En-têtes de sécurité HTTP (CSP, HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy)
+- Validation stricte des données reçues, logos vérifiés sur leur contenu réel (PNG, JPEG, WebP)
+- Import Excel et IA encadrés : taille de fichier limitée, réponses de l'IA validées, nombre d'analyses limité
+- Intégration Jira limitée aux sites `https://*.atlassian.net`
+- Redirection après connexion limitée aux pages de l'application
+- Démarrage refusé si un secret est absent ou trop faible
+
 ## Prochaines étapes possibles
 
 - Détection automatique des lignes de groupement à l'import Excel (mise de côté après la mise en place de la hiérarchie Epic, à revisiter)
-- Résolution propre de la confiance TLS entreprise (`NODE_TLS_REJECT_UNAUTHORIZED=0` est un contournement temporaire à retirer)
+- Connexion SSO (AWS Cognito), en attente des informations de l'équipe
 - Déploiement Hetzner (guide en 15 étapes déjà rédigé, à exécuter)
 
 ---
@@ -80,7 +90,7 @@
 
 ### Prérequis
 
-1. **Node.js** (version 20 ou supérieure) - https://nodejs.org (version LTS)
+1. **Node.js** (version 24) - https://nodejs.org (version LTS)
 2. **Docker Desktop** - https://www.docker.com/products/docker-desktop (doit être lancé avant de démarrer la base de données)
 
 Vérifie que tout est installé :
@@ -103,6 +113,7 @@ docker -v
    ```powershell
    copy .env.example .env
    ```
+   Remplace ensuite chaque valeur d'exemple (les instructions sont dans le fichier). L'application refuse de démarrer si `NEXTAUTH_SECRET` garde sa valeur d'exemple ou fait moins de 32 caractères.
 
 4. Démarre la base de données PostgreSQL :
    ```powershell
@@ -119,7 +130,9 @@ docker -v
    ```powershell
    npm run db:seed
    ```
-   Crée un workspace de démo avec plusieurs roadmaps (Rocker, Solid, Falcon, DMi, B2C), des items, des risques et des dépendances inter-équipes. Comptes : `admin@demo.local` / `pm-a@demo.local` / `pm-b@demo.local`, mot de passe `password123`.
+   Crée un workspace de démo avec plusieurs roadmaps (Rocker, Solid, Falcon, DMi, B2C), des items, des risques et des dépendances inter-équipes. Comptes : `admin@demo.local` / `pm-a@demo.local` / `pm-b@demo.local`. Le mot de passe est aléatoire, sauf si tu en fixes un avec `SEED_DEMO_PASSWORD` dans `.env` (12 caractères minimum).
+
+   Attention : relancer le seed efface puis recrée le workspace de démo. Il est refusé en production.
 
 7. Lance l'application :
    ```powershell
@@ -133,6 +146,25 @@ docker -v
 - Arrêter la base : `docker compose down` (les données restent dans `postgres-data/`)
 - Relancer : `docker compose up -d` puis `npm run dev`
 
+### Réseau d'entreprise CRIT
+
+Derrière le proxy CRIT (au bureau ou en VPN) :
+
+1. Dans `.env`, décommente la ligne `JIRA_HTTP_PROXY`. Hors réseau CRIT (télétravail sans VPN), elle doit rester commentée, sinon les appels à Jira et Anthropic échouent.
+2. Le proxy inspecte le trafic HTTPS avec son propre certificat. Pour que Node lui fasse confiance sans désactiver la vérification des certificats, définis une fois pour toutes cette variable Windows, puis ouvre une nouvelle fenêtre PowerShell :
+   ```powershell
+   [Environment]::SetEnvironmentVariable("NODE_USE_SYSTEM_CA", "1", "User")
+   ```
+   Node utilise alors aussi les certificats de confiance de Windows, où le certificat racine de CRIT est installé. N'utilise jamais `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+
+### Vérifier avant un déploiement
+
+```powershell
+npx tsc --noEmit
+npm run build
+npm audit
+```
+
 ### Outils utiles
 
 ```powershell
@@ -143,6 +175,6 @@ npx prisma studio
 
 ## Stack technique
 
-Next.js 14 (App Router) · TypeScript · PostgreSQL · Prisma · NextAuth · Tailwind CSS · composants shadcn-style faits main · Claude Haiku (import Excel/image, via `undici` ProxyAgent) · Jira Cloud API (sync bidirectionnelle, jetons AES-256-GCM) · Docker Compose · SheetJS (export Excel)
+Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Prisma · NextAuth · Tailwind CSS · composants shadcn-style faits main · Claude Haiku (import Excel/image, via `undici` ProxyAgent) · Jira Cloud API (sync bidirectionnelle, jetons AES-256-GCM) · Docker Compose · SheetJS (export Excel)
 
 Coût : **0€** en local. Passage sur Hetzner documenté séparément (guide de déploiement en 15 étapes).

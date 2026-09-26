@@ -14,7 +14,7 @@ const inter = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Roadmaps",
+  title: "Apex",
   description: "Pilotage de roadmaps multi-équipes",
 };
 
