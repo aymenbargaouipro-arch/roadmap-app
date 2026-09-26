@@ -127,6 +127,8 @@ export async function getStaleInterTeamDependencyCount(workspaceId: string): Pro
   }).length;
 }
 
+export type Velocity = { thisWeek: number; previousWeek: number };
+
 // Nombre de passages a "Termine" (via StatusHistory) cette semaine glissante vs la semaine
 // precedente. Un item importe deja au statut Termine (sans entree d'historique) n'est
 // compte dans aucune des deux fenetres - limite connue, coherente avec le reste du

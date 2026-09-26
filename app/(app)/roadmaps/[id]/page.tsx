@@ -16,7 +16,8 @@ import { RoadmapDependenciesTable, type RoadmapDependencyRow } from "@/component
 import { RoadmapRisks } from "@/components/roadmap-risks";
 import { RoadmapMilestones } from "@/components/roadmap-milestones";
 
-export default async function RoadmapDetailPage({ params }: { params: { id: string } }) {
+export default async function RoadmapDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
 

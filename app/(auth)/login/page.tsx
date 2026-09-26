@@ -8,11 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next");
+  // "next" vient des liens de l'app (ex : page d'invitation), "callbackUrl" de la redirection
+  // automatique du middleware NextAuth. Les deux sont filtres par safeNextPath.
+  const next = safeNextPath(searchParams.get("next") ?? searchParams.get("callbackUrl"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

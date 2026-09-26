@@ -11,7 +11,8 @@ function isRiskLevel(value: unknown): value is RiskLevel {
   return typeof value === "string" && (RISK_LEVELS as readonly string[]).includes(value);
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 

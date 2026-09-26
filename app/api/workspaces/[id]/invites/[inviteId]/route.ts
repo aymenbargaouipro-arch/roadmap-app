@@ -6,7 +6,11 @@ import { requireWorkspaceAdmin } from "@/lib/access";
 
 // Revocation d'un lien d'invitation (audit M2) : le lien cesse immediatement de fonctionner.
 // Les membres qui l'ont deja utilise restent membres (a retirer depuis la liste des membres).
-export async function DELETE(_req: Request, { params }: { params: { id: string; inviteId: string } }) {
+export async function DELETE(
+  _req: Request,
+  props: { params: Promise<{ id: string; inviteId: string }> }
+) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 

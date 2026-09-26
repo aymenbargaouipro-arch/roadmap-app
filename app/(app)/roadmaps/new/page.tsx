@@ -1,9 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { RoadmapCreateModal } from "@/components/roadmap-create-modal";
 
 export default function NewRoadmapPage() {
-  const router = useRouter();
-  return <RoadmapCreateModal onClose={() => router.back()} />;
+  // La modale gere elle-meme son ouverture et sa fermeture (elle n'accepte que "label").
+  return <RoadmapCreateModal />;
 }

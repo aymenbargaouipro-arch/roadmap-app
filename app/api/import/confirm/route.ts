@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recomputeEpicAggregates } from "@/lib/item-hierarchy";
-import { parseDateInput } from "@/lib/validation";
+import { isItemStatus, parseDateInput } from "@/lib/validation";
 
 type IncomingItem = {
   rowId: string;
@@ -18,7 +18,6 @@ type IncomingItem = {
 type IncomingMilestone = { title: string; date: string | null };
 type Target = { mode: "new"; name: string } | { mode: "existing"; roadmapId: string };
 
-const VALID_STATUSES = ["TODO", "IN_PROGRESS", "BLOCKED", "DONE"];
 const MAX_IMPORT_ITEMS = 5000;
 const MAX_IMPORT_MILESTONES = 1000;
 
@@ -111,7 +110,7 @@ export async function POST(req: Request) {
           title: (typeof it.title === "string" && it.title.trim() ? it.title : "Sans titre").slice(0, 500),
           startDate: parseDateInput(it.startDate) ?? today,
           endDate: parseDateInput(it.endDate) ?? today,
-          status: VALID_STATUSES.includes(it.status) ? (it.status as (typeof VALID_STATUSES)[number]) : "TODO",
+          status: isItemStatus(it.status) ? it.status : "TODO",
           progress: Math.max(0, Math.min(100, Math.round(Number(it.progress)) || 0)),
           ownerId: it.ownerId && allowedOwnerIds.has(it.ownerId) ? it.ownerId : null,
           roadmapId,

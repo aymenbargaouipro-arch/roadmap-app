@@ -24,7 +24,8 @@ async function requireRoadmapAdmin(roadmapId: string) {
   return { roadmap: access.entity };
 }
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireRoadmapAdmin(params.id);
   if ("error" in auth) return auth.error;
 
@@ -53,7 +54,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   });
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireRoadmapAdmin(params.id);
   if ("error" in auth) return auth.error;
 

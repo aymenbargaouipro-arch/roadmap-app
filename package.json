@@ -24,10 +24,10 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.441.0",
-    "next": "14.2.35",
+    "next": "15.5.26",
     "next-auth": "^4.24.7",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "tailwind-merge": "^2.5.2",
     "undici": "^8.10.2",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
@@ -36,8 +36,8 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.10",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "prisma": "^5.20.0",
@@ -48,5 +48,10 @@
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "^8.5.26"
+    }
   }
 }

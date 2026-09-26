@@ -20,7 +20,8 @@ async function isLastAdmin(workspaceId: string, targetRole: string): Promise<boo
   return adminCount <= 1;
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string; userId: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string; userId: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
@@ -48,7 +49,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string; us
   return NextResponse.json({ ok: true, role });
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string; userId: string } }) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string; userId: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 

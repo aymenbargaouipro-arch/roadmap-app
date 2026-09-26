@@ -6,7 +6,8 @@ import { requireRoadmapMember } from "@/lib/access";
 import { validateLogoDataUrl } from "@/lib/validation";
 import { isValidRoadmapColor, MAX_LOGO_BYTES } from "@/lib/roadmap-theme";
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
@@ -68,7 +69,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return NextResponse.json({ roadmap: updated });
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 

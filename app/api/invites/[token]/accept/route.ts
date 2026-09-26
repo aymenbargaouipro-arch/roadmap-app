@@ -8,7 +8,8 @@ const INVALID_MESSAGE = "Invitation invalide, expirée ou déjà utilisée. Dema
 
 class InviteUnavailableError extends Error {}
 
-export async function POST(_req: Request, { params }: { params: { token: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 

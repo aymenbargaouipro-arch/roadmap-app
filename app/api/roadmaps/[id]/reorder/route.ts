@@ -6,7 +6,8 @@ import { requireRoadmapMember } from "@/lib/access";
 
 const MAX_REORDER_ITEMS = 5000;
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 

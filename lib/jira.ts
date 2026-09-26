@@ -207,7 +207,7 @@ export async function listJiraProjects(creds: JiraCredentials): Promise<JiraList
   if (!res.ok) {
     return { ok: false, error: `Erreur Jira (${res.status}) lors du listage des projets.` };
   }
-  const json = await res.json().catch(() => null);
+  const json: any = await res.json().catch(() => null);
   const values = Array.isArray(json?.values) ? json.values : [];
   return {
     ok: true,
@@ -266,7 +266,7 @@ export async function searchJiraIssues(
       return { ok: false, error: `Erreur Jira (${res.status}) lors de la récupération des tickets.` };
     }
 
-    const json = await res.json().catch(() => null);
+    const json: any = await res.json().catch(() => null);
     const issues: JiraIssue[] = Array.isArray(json?.issues) ? json.issues : [];
     all.push(...issues);
 
