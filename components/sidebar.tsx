@@ -39,7 +39,7 @@ export function Sidebar({ workspaceName, isAdmin }: { workspaceName: string; isA
         }
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/atlas-logo.png" alt="" className="h-7 w-7 shrink-0 rounded-lg" />
+        <img src="/apex-logo.png" alt="" className="h-7 w-7 shrink-0 rounded-lg" />
         {!collapsed && <span className="truncate text-base font-semibold text-ink">Apex</span>}
       </div>
 
