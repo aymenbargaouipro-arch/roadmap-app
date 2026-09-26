@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isItemInWorkspace, isRoadmapInWorkspace, requireItemMember } from "@/lib/access";
 
 type Direction = "BLOCKS" | "BLOCKED_BY";
 type TargetKind = "ITEM" | "TEAM" | "EXTERNAL";
@@ -11,13 +12,22 @@ const VALID_TYPES: DepType[] = ["FD", "DD", "FF", "DF"];
 const VALID_TARGET_KINDS: TargetKind[] = ["ITEM", "TEAM", "EXTERNAL"];
 
 // Verifie si ajouter l'arc newBlockingId -> newBlockedId fermerait un cycle, en tenant
-// compte de TOUTES les dependances de type ITEM existantes dans le workspace (les cycles
-// peuvent traverser plusieurs equipes). Seules les dependances ayant a la fois un
+// compte de toutes les dependances de type ITEM existantes dans CE workspace uniquement
+// (les cycles peuvent traverser plusieurs equipes du workspace, jamais d'autres
+// workspaces). Seules les dependances ayant a la fois un
 // blockingItemId et un blockedItemId forment de vraies aretes item -> item (les cibles
 // TEAM/EXTERNAL n'en forment pas et ne participent donc pas au graphe de cycles).
-async function wouldCreateCycle(newBlockingId: string, newBlockedId: string): Promise<boolean> {
+async function wouldCreateCycle(
+  newBlockingId: string,
+  newBlockedId: string,
+  workspaceId: string
+): Promise<boolean> {
   const edges = await prisma.dependency.findMany({
-    where: { blockingItemId: { not: null }, blockedItemId: { not: null } },
+    where: {
+      blockingItemId: { not: null },
+      blockedItemId: { not: null },
+      blockingItem: { roadmap: { workspaceId } },
+    },
     select: { blockingItemId: true, blockedItemId: true },
   });
 
@@ -49,6 +59,9 @@ async function wouldCreateCycle(newBlockingId: string, newBlockedId: string): Pr
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+
+  const access = await requireItemMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
 
   const dependencies = await prisma.dependency.findMany({
     where: {
@@ -109,6 +122,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
+  const access = await requireItemMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
+
   const body = await req.json().catch(() => ({}));
   const {
     type,
@@ -150,6 +166,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: "Nom du système externe manquant." }, { status: 400 });
   }
 
+  // La cible (tache ou equipe) doit appartenir au meme workspace que l'item source.
+  if (targetKind === "ITEM" && !(await isItemInWorkspace(String(targetItemId), access.workspaceId))) {
+    return NextResponse.json({ error: "Tâche cible introuvable." }, { status: 400 });
+  }
+  if (targetKind === "TEAM" && !(await isRoadmapInWorkspace(String(targetRoadmapId), access.workspaceId))) {
+    return NextResponse.json({ error: "Équipe cible introuvable." }, { status: 400 });
+  }
+
   const otherItemId = targetKind === "ITEM" ? targetItemId! : null;
   const blockingItemId = direction === "BLOCKS" ? params.id : otherItemId;
   const blockedItemId = direction === "BLOCKED_BY" ? params.id : otherItemId;
@@ -157,7 +181,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const finalExternalName = targetKind === "EXTERNAL" ? externalSystemName!.trim() : null;
 
   if (targetKind === "ITEM" && blockingItemId && blockedItemId) {
-    const cyclic = await wouldCreateCycle(blockingItemId, blockedItemId);
+    const cyclic = await wouldCreateCycle(blockingItemId, blockedItemId, access.workspaceId);
     if (cyclic) {
       return NextResponse.json(
         {
@@ -201,9 +225,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: "Cette dépendance existe déjà." }, { status: 409 });
     }
     console.error("POST /api/items/[id]/dependencies failed:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erreur serveur inconnue." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erreur serveur, la dépendance n'a pas été créée." }, { status: 500 });
   }
 }
+

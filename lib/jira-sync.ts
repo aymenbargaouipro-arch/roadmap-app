@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { getWorkspaceJiraCredentials, searchJiraIssues, type JiraIssue } from "@/lib/jira";
+import {
+  getWorkspaceJiraCredentials,
+  isValidJiraProjectKey,
+  JIRA_NOT_CONNECTED_MESSAGE,
+  searchJiraIssues,
+  type JiraIssue,
+} from "@/lib/jira";
 import { recomputeEpicAggregates } from "@/lib/item-hierarchy";
 
 export type JiraSyncResult =
@@ -65,8 +71,15 @@ export async function syncRoadmapFromJira(roadmapId: string): Promise<JiraSyncRe
     return { ok: false, error: "Mapping Jira incomplet (projet ou champs de dates manquants)." };
   }
 
+  // Revalide au moment de l'usage (audit M5) : un mapping enregistre avant ce controle ne
+  // doit pas pouvoir injecter du JQL.
+  if (!isValidJiraProjectKey(roadmap.jiraProjectKey)) {
+    return { ok: false, error: "Clé de projet Jira invalide : refais le mapping Jira de cette roadmap." };
+  }
+
   const creds = await getWorkspaceJiraCredentials(roadmap.workspaceId);
-  if (!creds) return { ok: false, error: "Jira n'est pas connecté pour ce workspace." };
+  if (!creds) return { ok: false, error: JIRA_NOT_CONNECTED_MESSAGE };
+  const workspaceId = roadmap.workspaceId;
 
   const startFieldId = roadmap.jiraStartDateFieldId;
   const endFieldId = roadmap.jiraEndDateFieldId;
@@ -117,8 +130,10 @@ export async function syncRoadmapFromJira(roadmapId: string): Promise<JiraSyncRe
     const endDate = extractDate(issue, endFieldId);
     const beforeSyncThreshold = Boolean(syncFromDate && startDate && startDate < syncFromDate);
     const status = mapStatus(issue);
+    // Cle d'upsert = (roadmap, ticket Jira) : deux roadmaps mappees sur le meme projet Jira
+    // ont chacune leurs propres items et ne s'ecrasent plus mutuellement (audit M5).
     const existing = await prisma.item.findUnique({
-      where: { jiraIssueKey: issue.key },
+      where: { roadmapId_jiraIssueKey: { roadmapId, jiraIssueKey: issue.key } },
       select: { id: true, jiraHiddenAt: true },
     });
 
@@ -149,7 +164,7 @@ export async function syncRoadmapFromJira(roadmapId: string): Promise<JiraSyncRe
     }
 
     const item = await prisma.item.upsert({
-      where: { jiraIssueKey: issue.key },
+      where: { roadmapId_jiraIssueKey: { roadmapId, jiraIssueKey: issue.key } },
       update: {
         title: issue.fields.summary,
         startDate,
@@ -224,10 +239,22 @@ export async function syncRoadmapFromJira(roadmapId: string): Promise<JiraSyncRe
   // Dependances : uniquement le type de lien standard Jira "Blocks" (nom interne stable,
   // independant de la langue de l'instance). Statut deduit du statut de l'issue bloquante :
   // Resolu si elle est Terminee cote Jira, sinon En attente.
+  // Resolution d'un ticket Jira vers un item : d'abord dans cette roadmap, sinon dans une
+  // autre roadmap du MEME workspace (dependance inter-equipes). Jamais hors du workspace.
   const itemIdCache = new Map<string, string | null>();
   async function resolveItemId(jiraKey: string): Promise<string | null> {
     if (itemIdCache.has(jiraKey)) return itemIdCache.get(jiraKey)!;
-    const found = await prisma.item.findUnique({ where: { jiraIssueKey: jiraKey }, select: { id: true } });
+    const own = await prisma.item.findUnique({
+      where: { roadmapId_jiraIssueKey: { roadmapId, jiraIssueKey: jiraKey } },
+      select: { id: true },
+    });
+    const found =
+      own ??
+      (await prisma.item.findFirst({
+        where: { jiraIssueKey: jiraKey, roadmap: { workspaceId } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      }));
     itemIdCache.set(jiraKey, found?.id ?? null);
     return found?.id ?? null;
   }
@@ -290,8 +317,20 @@ export async function syncRoadmapFromJira(roadmapId: string): Promise<JiraSyncRe
 
       const existingDep = await prisma.dependency.findUnique({
         where: { jiraLinkId: link.id },
-        select: { id: true },
+        select: {
+          id: true,
+          blockingItem: { select: { roadmap: { select: { workspaceId: true } } } },
+          blockedItem: { select: { roadmap: { select: { workspaceId: true } } } },
+        },
       });
+
+      // jiraLinkId est unique sur toute la base : si ce lien a deja ete importe par un AUTRE
+      // workspace (meme instance Jira), on n'y touche pas plutot que de le rattacher ici.
+      if (existingDep) {
+        const depWorkspaceId =
+          existingDep.blockingItem?.roadmap.workspaceId ?? existingDep.blockedItem?.roadmap.workspaceId ?? null;
+        if (depWorkspaceId && depWorkspaceId !== workspaceId) continue;
+      }
 
       await prisma.dependency.upsert({
         where: { jiraLinkId: link.id },
@@ -320,3 +359,4 @@ export async function syncRoadmapFromJira(roadmapId: string): Promise<JiraSyncRe
     },
   };
 }
+

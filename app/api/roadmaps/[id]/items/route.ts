@@ -3,16 +3,26 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recomputeEpicAggregates } from "@/lib/item-hierarchy";
+import { requireRoadmapMember } from "@/lib/access";
+import { parseDateInput } from "@/lib/validation";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
-  const { title, startDate, endDate, parentId } = await req.json();
-  if (!title?.trim() || !startDate || !endDate) {
-    return NextResponse.json({ error: "Titre et dates requis." }, { status: 400 });
+  const access = await requireRoadmapMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
+
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Corps de requête invalide." }, { status: 400 });
+  const title = typeof body.title === "string" ? body.title.trim().slice(0, 500) : "";
+  const startDate = parseDateInput(body.startDate);
+  const endDate = parseDateInput(body.endDate);
+  const parentId = typeof body.parentId === "string" && body.parentId ? body.parentId : null;
+  if (!title || !startDate || !endDate) {
+    return NextResponse.json({ error: "Titre et dates valides requis." }, { status: 400 });
   }
-  if (new Date(endDate) < new Date(startDate)) {
+  if (endDate < startDate) {
     return NextResponse.json(
       { error: "La date de fin doit être après la date de début." },
       { status: 400 }
@@ -38,9 +48,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const item = await prisma.item.create({
     data: {
-      title: title.trim(),
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
+      title,
+      startDate,
+      endDate,
       position: count,
       roadmapId: params.id,
       ownerId: session.user.id,
@@ -55,3 +65,4 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   return NextResponse.json(item);
 }
+

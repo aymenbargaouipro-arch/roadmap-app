@@ -5,12 +5,15 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   parseWorkbook,
+  isXlsxSignature,
+  MAX_EXCEL_BYTES,
   sheetToRawRows,
   findMilestoneSheetName,
   parseCellDate,
   cellAt,
 } from "@/lib/excel-import";
-import { mapMainSheet, mapMilestoneSheet } from "@/lib/anthropic";
+import { mapMainSheet, mapMilestoneSheet, ImportAiError } from "@/lib/anthropic";
+import { checkImportRateLimit } from "@/lib/rate-limit";
 import { transformRowsToItems, type PreviewMilestone } from "@/lib/import-transform";
 
 const AI_SAMPLE_ROWS = 25;
@@ -25,15 +28,29 @@ export async function POST(req: Request) {
   });
   if (!membership) return NextResponse.json({ error: "Aucun espace de travail." }, { status: 400 });
 
+  const rateLimitError = checkImportRateLimit(session.user.id, membership.workspaceId);
+  if (rateLimitError) return NextResponse.json({ error: rateLimitError }, { status: 429 });
+
   const formData = await req.formData().catch(() => null);
   const file = formData?.get("file");
   if (!file || !(file instanceof File)) {
     return NextResponse.json({ error: "Fichier manquant." }, { status: 400 });
   }
 
+  // Controles AVANT toute lecture du contenu par SheetJS (audit H2 et M6).
+  if (file.size > MAX_EXCEL_BYTES) {
+    return NextResponse.json({ error: "Fichier trop volumineux (5 Mo max)." }, { status: 400 });
+  }
+  const buffer = Buffer.from(await file.arrayBuffer());
+  if (!isXlsxSignature(buffer)) {
+    return NextResponse.json(
+      { error: "Format non supporté. Seuls les fichiers .xlsx sont acceptés." },
+      { status: 400 }
+    );
+  }
+
   let workbook;
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
     workbook = parseWorkbook(buffer);
   } catch (err) {
     console.error("Erreur lecture Excel:", err);
@@ -60,7 +77,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("Erreur mapping IA:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Le mapping automatique a échoué." },
+      { error: err instanceof ImportAiError ? err.message : "Le mapping automatique a échoué." },
       { status: 502 }
     );
   }
@@ -138,3 +155,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ suggestedRoadmapName, items, milestones, warnings });
 }
+

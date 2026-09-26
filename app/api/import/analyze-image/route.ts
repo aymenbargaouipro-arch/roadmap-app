@@ -2,13 +2,33 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { extractAndMapFromImage } from "@/lib/anthropic";
+import { extractAndMapFromImage, ImportAiError } from "@/lib/anthropic";
+import { checkImportRateLimit } from "@/lib/rate-limit";
 import { transformRowsToItems, type PreviewMilestone } from "@/lib/import-transform";
 
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 // 8 Mo : marge de securite sous les limites de taille de l'API vision (documentees autour
 // de quelques Mo par image selon le point d'entree), a ajuster si des cas reels y buttent.
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
+
+// Type reel de l'image d'apres ses premiers octets : on ne se fie pas au type annonce par le
+// navigateur, qui est librement modifiable par le client.
+function detectImageType(buffer: Buffer): string | null {
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return "image/png";
+  }
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    buffer.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -19,6 +39,9 @@ export async function POST(req: Request) {
     orderBy: { createdAt: "asc" },
   });
   if (!membership) return NextResponse.json({ error: "Aucun espace de travail." }, { status: 400 });
+
+  const rateLimitError = checkImportRateLimit(session.user.id, membership.workspaceId);
+  if (rateLimitError) return NextResponse.json({ error: rateLimitError }, { status: 429 });
 
   const formData = await req.formData().catch(() => null);
   const file = formData?.get("file");
@@ -41,15 +64,22 @@ export async function POST(req: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  const detectedType = detectImageType(buffer);
+  if (!detectedType) {
+    return NextResponse.json(
+      { error: "Format non supporté. Utilise une image PNG, JPEG ou WebP." },
+      { status: 400 }
+    );
+  }
   const base64Data = buffer.toString("base64");
 
   let extraction;
   try {
-    extraction = await extractAndMapFromImage(base64Data, file.type);
+    extraction = await extractAndMapFromImage(base64Data, detectedType);
   } catch (err) {
     console.error("Erreur extraction image:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "L'extraction depuis l'image a échoué." },
+      { error: err instanceof ImportAiError ? err.message : "L'extraction depuis l'image a échoué." },
       { status: 502 }
     );
   }
@@ -128,3 +158,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ suggestedRoadmapName, items, milestones, warnings });
 }
+

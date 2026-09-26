@@ -1,16 +1,35 @@
 import * as XLSX from "xlsx";
 import { parse as parseDateFns, isValid } from "date-fns";
 
-export function parseWorkbook(buffer: Buffer): XLSX.WorkBook {
-  return XLSX.read(buffer, { type: "buffer", cellDates: true });
-}
-
 // Lit une feuille en tableau brut de lignes (chaque ligne = tableau de cellules dans l'ordre
 // des colonnes). On ne suppose PAS que la ligne 1 est l'en-tete : beaucoup de fichiers reels
 // ont une ligne de titre de document et/ou des lignes de periodes/sprints au-dessus du vrai
 // en-tete. C'est a l'IA de reperer la bonne ligne (voir lib/anthropic.ts).
 const MAX_COLUMNS = 80;
 const MAX_ROWS = 5000;
+
+// Taille maximale d'un fichier Excel accepte a l'import (audit M6). Verifiee dans la route
+// AVANT toute lecture du contenu.
+export const MAX_EXCEL_BYTES = 5 * 1024 * 1024;
+
+// Un .xlsx (ou .xlsm) est une archive ZIP : ses 4 premiers octets valent toujours 50 4B 03 04.
+// On refuse tout le reste AVANT de passer le fichier a SheetJS (audit H2) : sans ce controle,
+// SheetJS choisit lui-meme un parseur selon le contenu (ancien .xls, SYLK, DBF...), ce qui
+// elargit inutilement la surface d'attaque.
+export function isXlsxSignature(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04
+  );
+}
+
+export function parseWorkbook(buffer: Buffer): XLSX.WorkBook {
+  if (!isXlsxSignature(buffer)) {
+    throw new Error("Signature de fichier non reconnue (pas un .xlsx).");
+  }
+  // sheetRows borne le parsing lui-meme (et pas seulement le resultat) au nombre de lignes
+  // qu'on exploite de toute facon (+1 de marge pour la ligne d'en-tete).
+  return XLSX.read(buffer, { type: "buffer", cellDates: true, sheetRows: MAX_ROWS + 1 });
+}
 
 export function sheetToRawRows(workbook: XLSX.WorkBook, sheetName: string): unknown[][] {
   const sheet = workbook.Sheets[sheetName];
@@ -52,8 +71,14 @@ export function parseCellDate(value: unknown, hintedFormat?: string): Date | nul
       hintedFormat && hintedFormat !== "unknown" ? [hintedFormat, ...DATE_FORMATS] : DATE_FORMATS;
 
     for (const fmt of candidates) {
-      const parsed = parseDateFns(trimmed, fmt, new Date());
-      if (isValid(parsed)) return parsed;
+      // Un format mal forme (ex "DD/MM/YYYY", jetons refuses par date-fns) leve une
+      // exception au lieu de renvoyer une date invalide : on passe simplement au suivant.
+      try {
+        const parsed = parseDateFns(trimmed, fmt, new Date());
+        if (isValid(parsed)) return parsed;
+      } catch {
+        continue;
+      }
     }
 
     const native = new Date(trimmed);
@@ -172,3 +197,4 @@ export function detectRowLevel(
 
   return { level: "flat", epicNumber: null };
 }
+

@@ -4,15 +4,19 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recomputeEpicAggregates } from "@/lib/item-hierarchy";
 import { syncItemDatesToJira } from "@/lib/jira-writeback";
+import { isWorkspaceMember, requireItemMember } from "@/lib/access";
+import { isItemStatus, parseDateInput } from "@/lib/validation";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
-  const current = await prisma.item.findUnique({ where: { id: params.id } });
-  if (!current) return NextResponse.json({ error: "Item introuvable." }, { status: 404 });
+  const access = await requireItemMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
+  const current = access.entity;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Corps de requête invalide." }, { status: 400 });
 
   // Validation explicite d'un decalage prevu/reel (depuis la modale d'historique), avec ou
   // sans commentaire. Action isolee : ne se combine pas avec d'autres champs dans le meme
@@ -29,7 +33,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         previousPlannedEnd: current.plannedEndDate ?? current.endDate,
         newPlannedStart: current.startDate,
         newPlannedEnd: current.endDate,
-        comment: typeof body.comment === "string" && body.comment.trim() ? body.comment.trim() : null,
+        comment: typeof body.comment === "string" && body.comment.trim() ? body.comment.trim().slice(0, 2000) : null,
       },
     });
 
@@ -43,22 +47,44 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const data: Record<string, unknown> = {};
 
-  if (typeof body.title === "string" && body.title.trim()) data.title = body.title.trim();
-  if (body.ownerId !== undefined) data.ownerId = body.ownerId || null;
+  if (typeof body.title === "string" && body.title.trim()) data.title = body.title.trim().slice(0, 500);
+  if (body.ownerId !== undefined) {
+    const ownerId: string | null = body.ownerId ? String(body.ownerId) : null;
+    // Le responsable doit faire partie du meme workspace que l'item.
+    if (ownerId && !(await isWorkspaceMember(ownerId, access.workspaceId))) {
+      return NextResponse.json({ error: "Responsable introuvable dans ce workspace." }, { status: 400 });
+    }
+    data.ownerId = ownerId;
+  }
+  // Valeurs controlees avant tout acces a la base (audit L5) : une valeur invalide donne une
+  // erreur 400 explicite au lieu d'une exception Prisma (500).
   if (body.status) {
+    if (!isItemStatus(body.status)) {
+      return NextResponse.json({ error: "Statut invalide." }, { status: 400 });
+    }
     data.status = body.status;
   }
-  if (typeof body.progress === "number") {
-    data.progress = Math.max(0, Math.min(100, body.progress));
+  if (typeof body.progress === "number" && Number.isFinite(body.progress)) {
+    data.progress = Math.max(0, Math.min(100, Math.round(body.progress)));
   }
-  if (body.startDate) data.startDate = new Date(body.startDate);
-  if (body.endDate) data.endDate = new Date(body.endDate);
-  if (typeof body.position === "number") data.position = body.position;
+  if (body.startDate) {
+    const startDate = parseDateInput(body.startDate);
+    if (!startDate) return NextResponse.json({ error: "Date de début invalide." }, { status: 400 });
+    data.startDate = startDate;
+  }
+  if (body.endDate) {
+    const endDate = parseDateInput(body.endDate);
+    if (!endDate) return NextResponse.json({ error: "Date de fin invalide." }, { status: 400 });
+    data.endDate = endDate;
+  }
+  if (typeof body.position === "number" && Number.isInteger(body.position) && body.position >= 0) {
+    data.position = body.position;
+  }
 
   const oldParentId = current.parentId;
 
   if (body.parentId !== undefined) {
-    const newParentId: string | null = body.parentId || null;
+    const newParentId: string | null = typeof body.parentId === "string" && body.parentId ? body.parentId : null;
 
     if (newParentId) {
       if (newParentId === params.id) {
@@ -162,8 +188,9 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
-  const item = await prisma.item.findUnique({ where: { id: params.id } });
-  if (!item) return NextResponse.json({ error: "Item introuvable." }, { status: 404 });
+  const access = await requireItemMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
+  const item = access.entity;
 
   const childCount = await prisma.item.count({ where: { parentId: params.id } });
 
@@ -200,3 +227,4 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
   return NextResponse.json({ ok: true, deletedCount: idsToDelete.length });
 }
+

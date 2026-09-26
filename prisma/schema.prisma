@@ -62,6 +62,15 @@ model Invite {
   role        Role     @default(MEMBER)
   createdAt   DateTime @default(now())
 
+  // Cycle de vie d'un lien d'invitation (audit M2). Un lien n'est utilisable que s'il n'est
+  // ni expire, ni revoque, ni epuise (voir lib/invites.ts). expiresAt est nullable pour les
+  // liens crees avant cette regle : ils sont consideres comme expires.
+  expiresAt   DateTime?
+  // Nombre maximal d'utilisations (null = illimite) et nombre deja consomme.
+  maxUses     Int?
+  useCount    Int       @default(0)
+  revokedAt   DateTime?
+
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   workspaceId String
 }
@@ -151,10 +160,11 @@ model Item {
   plannedStartDate DateTime?
   plannedEndDate   DateTime?
 
-  // Cle de l'issue Jira d'origine (ex: "ROCK-42"), unique quand presente. Sert de cle
-  // d'upsert lors d'une synchronisation : un item deja importe est mis a jour plutot que
-  // duplique. Null pour les items crees a la main dans l'app.
-  jiraIssueKey String? @unique
+  // Cle de l'issue Jira d'origine (ex: "ROCK-42"). Unique PAR ROADMAP (voir @@unique en bas
+  // du modele) : sert de cle d'upsert lors d'une synchronisation, un item deja importe est mis
+  // a jour plutot que duplique, et deux roadmaps mappees sur le meme projet Jira ne
+  // s'ecrasent plus mutuellement. Null pour les items crees a la main dans l'app.
+  jiraIssueKey String?
 
   // Renseigne quand un item importe depuis Jira ne doit plus apparaitre dans les vues
   // (Gantt, tableau) : soit l'issue Jira a ete supprimee/deplacee hors du projet, soit
@@ -181,6 +191,8 @@ model Item {
   blockedBy  Dependency[]  @relation("BlockedItem")
   // dependances : cet item "bloque" d'autres cibles (item / equipe / externe)
   blocking   Dependency[]  @relation("BlockingItem")
+
+  @@unique([roadmapId, jiraIssueKey])
 }
 
 // Historique des decalages prevu/reel valides (avec commentaire optionnel). Une meme tache
@@ -322,3 +334,5 @@ model Risk {
   roadmap     Roadmap    @relation(fields: [roadmapId], references: [id])
   roadmapId   String
 }
+
+

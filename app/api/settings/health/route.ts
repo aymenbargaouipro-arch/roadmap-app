@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkbox, parseJsonBody, roundedInt } from "@/lib/validation";
+
+// Les cases a cocher doivent etre de vrais booleens : avant, n'importe quelle valeur non vide
+// (y compris le texte "false") etait interpretee comme "coche" (audit L5).
+const healthSchema = z.object({
+  lateRatioRedThreshold: roundedInt(0, 100, "Le seuil de retard doit être entre 0 et 100 %."),
+  lateCountOrangeThreshold: roundedInt(0, 10000, "Le nombre d'items en retard doit être un nombre positif."),
+  blockedItemTriggersRed: checkbox,
+  activeDependencyTriggersRed: checkbox,
+  highRiskTriggersRed: checkbox,
+  mediumRiskTriggersOrange: checkbox,
+});
 
 export async function PATCH(req: Request) {
   const session = await getServerSession(authOptions);
@@ -16,31 +29,19 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Réservé aux administrateurs." }, { status: 403 });
   }
 
-  const body = await req.json().catch(() => null);
-  if (!body) return NextResponse.json({ error: "Corps de requête invalide." }, { status: 400 });
-
-  const lateRatioRedThreshold = Math.round(Number(body.lateRatioRedThreshold));
-  const lateCountOrangeThreshold = Math.round(Number(body.lateCountOrangeThreshold));
-
-  if (
-    Number.isNaN(lateRatioRedThreshold) ||
-    Number.isNaN(lateCountOrangeThreshold) ||
-    lateRatioRedThreshold < 0 ||
-    lateRatioRedThreshold > 100 ||
-    lateCountOrangeThreshold < 0
-  ) {
-    return NextResponse.json({ error: "Valeurs numériques invalides." }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(req, healthSchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   await prisma.workspace.update({
     where: { id: membership.workspaceId },
     data: {
-      healthLateRatioRedThreshold: lateRatioRedThreshold,
-      healthLateCountOrangeThreshold: lateCountOrangeThreshold,
-      healthBlockedItemTriggersRed: Boolean(body.blockedItemTriggersRed),
-      healthActiveDependencyTriggersRed: Boolean(body.activeDependencyTriggersRed),
-      healthHighRiskTriggersRed: Boolean(body.highRiskTriggersRed),
-      healthMediumRiskTriggersOrange: Boolean(body.mediumRiskTriggersOrange),
+      healthLateRatioRedThreshold: body.lateRatioRedThreshold,
+      healthLateCountOrangeThreshold: body.lateCountOrangeThreshold,
+      healthBlockedItemTriggersRed: body.blockedItemTriggersRed,
+      healthActiveDependencyTriggersRed: body.activeDependencyTriggersRed,
+      healthHighRiskTriggersRed: body.highRiskTriggersRed,
+      healthMediumRiskTriggersOrange: body.mediumRiskTriggersOrange,
     },
   });
 

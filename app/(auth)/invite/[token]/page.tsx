@@ -2,14 +2,19 @@ import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { inviteState } from "@/lib/invites";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AcceptInviteButton } from "@/components/accept-invite-button";
 
 export default async function InvitePage({ params }: { params: { token: string } }) {
-  const invite = await prisma.invite.findUnique({
+  const found = await prisma.invite.findUnique({
     where: { token: params.token },
-    include: { workspace: true },
+    include: { workspace: { select: { name: true } } },
   });
+
+  // Un lien expire, revoque ou deja utilise est traite exactement comme un lien inexistant :
+  // on n'affiche meme pas le nom de l'espace.
+  const invite = found && inviteState(found) === "active" ? found : null;
 
   const session = await getServerSession(authOptions);
 
@@ -21,7 +26,7 @@ export default async function InvitePage({ params }: { params: { token: string }
           <CardDescription>
             {invite
               ? `Vous êtes invité à rejoindre cet espace en tant que ${invite.role === "ADMIN" ? "administrateur" : "membre"}.`
-              : "Ce lien d'invitation n'existe plus ou a été mal copié."}
+              : "Ce lien d'invitation a expiré, a déjà été utilisé ou a été révoqué. Demandez un nouveau lien à votre administrateur."}
           </CardDescription>
         </CardHeader>
         {invite && (

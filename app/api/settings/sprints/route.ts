@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseJsonBody, requiredDate, roundedInt } from "@/lib/validation";
+
+const sprintsSchema = z.object({
+  referenceDate: requiredDate("Date de référence invalide."),
+  durationWeeks: roundedInt(1, 52, "Durée en semaines invalide (entre 1 et 52)."),
+  referenceNumber: roundedInt(0, 100000, "Numéro de sprint invalide."),
+});
 
 export async function PATCH(req: Request) {
   const session = await getServerSession(authOptions);
@@ -16,32 +24,16 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Réservé aux administrateurs." }, { status: 403 });
   }
 
-  const body = await req.json().catch(() => null);
-  if (!body) return NextResponse.json({ error: "Corps de requête invalide." }, { status: 400 });
-
-  const { referenceDate, durationWeeks, referenceNumber } = body;
-
-  const parsedDate = referenceDate ? new Date(referenceDate) : null;
-  if (!parsedDate || isNaN(parsedDate.getTime())) {
-    return NextResponse.json({ error: "Date de référence invalide." }, { status: 400 });
-  }
-
-  const durationWeeksNum = Number(durationWeeks);
-  if (!Number.isFinite(durationWeeksNum) || durationWeeksNum <= 0) {
-    return NextResponse.json({ error: "Durée en semaines invalide (doit être un nombre positif)." }, { status: 400 });
-  }
-
-  const referenceNumberNum = Number(referenceNumber);
-  if (!Number.isFinite(referenceNumberNum)) {
-    return NextResponse.json({ error: "Numéro de sprint invalide." }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(req, sprintsSchema);
+  if (!parsed.ok) return parsed.response;
+  const { referenceDate, durationWeeks, referenceNumber } = parsed.data;
 
   await prisma.workspace.update({
     where: { id: membership.workspaceId },
     data: {
-      sprintReferenceDate: parsedDate,
-      sprintDurationWeeks: Math.round(durationWeeksNum),
-      sprintReferenceNumber: Math.round(referenceNumberNum),
+      sprintReferenceDate: referenceDate,
+      sprintDurationWeeks: durationWeeks,
+      sprintReferenceNumber: referenceNumber,
     },
   });
 

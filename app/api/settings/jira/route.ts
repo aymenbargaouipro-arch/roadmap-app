@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/crypto";
-import { testJiraConnection } from "@/lib/jira";
+import { testJiraConnection, validateJiraSiteUrl } from "@/lib/jira";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -32,8 +32,17 @@ export async function PATCH(req: Request) {
   if (!siteUrl || !email || !apiToken) {
     return NextResponse.json({ error: "URL du site, email et token sont requis." }, { status: 400 });
   }
+  if (email.length > 320 || apiToken.length > 1000) {
+    return NextResponse.json({ error: "Email ou token trop long." }, { status: 400 });
+  }
 
-  const test = await testJiraConnection({ siteUrl, email, apiToken });
+  // Seules les URL Jira Cloud (https://xxx.atlassian.net) sont acceptees (audit H1). On
+  // enregistre la forme normalisee, jamais la saisie brute.
+  const validation = validateJiraSiteUrl(siteUrl);
+  if (!validation.ok) return NextResponse.json({ error: validation.error }, { status: 400 });
+  const normalizedSiteUrl = validation.siteUrl;
+
+  const test = await testJiraConnection({ siteUrl: normalizedSiteUrl, email, apiToken });
   if (!test.ok) {
     return NextResponse.json({ error: test.error }, { status: 400 });
   }
@@ -41,9 +50,9 @@ export async function PATCH(req: Request) {
   await prisma.workspace.update({
     where: { id: auth.membership.workspaceId },
     data: {
-      jiraSiteUrl: siteUrl,
+      jiraSiteUrl: normalizedSiteUrl,
       jiraEmail: email,
-      jiraApiTokenEncrypted: encryptSecret(apiToken),
+      jiraApiTokenEncrypted: encryptSecret(apiToken, auth.membership.workspaceId),
       jiraConnectedAt: new Date(),
     },
   });
@@ -67,3 +76,4 @@ export async function DELETE() {
 
   return NextResponse.json({ ok: true });
 }
+

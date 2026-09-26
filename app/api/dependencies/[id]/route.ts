@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireDependencyMember } from "@/lib/access";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+
+  const access = await requireDependencyMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
 
   const body = await req.json().catch(() => ({}));
   const data: Record<string, unknown> = {};
@@ -54,6 +58,9 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
+  const access = await requireDependencyMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
+
   try {
     await prisma.dependency.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });
@@ -62,3 +69,4 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     return NextResponse.json({ error: "Dépendance introuvable." }, { status: 404 });
   }
 }
+

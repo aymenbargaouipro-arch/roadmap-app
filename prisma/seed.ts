@@ -1,5 +1,29 @@
 import { PrismaClient, ItemStatus, RiskLevel, RiskStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
+
+// --- Garde-fous (audit L6) -----------------------------------------------------------------
+// Ce script EFFACE puis recree le workspace de demonstration : il ne doit jamais tourner sur
+// une base de production. Il refuse donc de s'executer si NODE_ENV vaut "production".
+if (process.env.NODE_ENV === "production") {
+  console.error("[seed] Refuse : NODE_ENV=production. Ce script efface des donnees, il est reserve au developpement.");
+  process.exit(1);
+}
+
+// Mot de passe des comptes de demo : aleatoire a chaque execution (affiche une seule fois en
+// fin de script), sauf si SEED_DEMO_PASSWORD est defini dans .env (12 caracteres minimum)
+// pour garder un mot de passe stable entre deux seeds.
+function demoPassword(): string {
+  const fromEnv = process.env.SEED_DEMO_PASSWORD;
+  if (fromEnv) {
+    if (fromEnv.length < 12) {
+      console.error("[seed] SEED_DEMO_PASSWORD trop court : 12 caracteres minimum.");
+      process.exit(1);
+    }
+    return fromEnv;
+  }
+  return randomBytes(12).toString("base64url");
+}
 
 const prisma = new PrismaClient();
 
@@ -69,13 +93,16 @@ async function resetDemoWorkspace(): Promise<string> {
 async function main() {
   const workspaceName = await resetDemoWorkspace();
 
-  const passwordHash = await bcrypt.hash("password123", 10);
+  const password = demoPassword();
+  const passwordHash = await bcrypt.hash(password, 10);
   const now = new Date();
   const days = (n: number) => new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
 
+  // update: { passwordHash } : un compte de demo deja existant recoit aussi le nouveau mot de
+  // passe, pour que celui affiche en fin de script soit toujours le bon.
   const admin = await prisma.user.upsert({
     where: { email: "admin@demo.local" },
-    update: {},
+    update: { passwordHash },
     create: { email: "admin@demo.local", name: "Admin Démo", passwordHash },
   });
 
@@ -84,7 +111,7 @@ async function main() {
   for (const team of teams) {
     pms[team] = await prisma.user.upsert({
       where: { email: `pm-${team.toLowerCase()}@demo.local` },
-      update: {},
+      update: { passwordHash },
       create: { email: `pm-${team.toLowerCase()}@demo.local`, name: `PM ${team}`, passwordHash },
     });
   }
@@ -227,8 +254,11 @@ async function main() {
     ],
   });
 
-  console.log("Seed terminé — mix de santé attendu : Rocker = Sain, Falcon = À surveiller, Solid/DMi/B2C = Critique.");
-  console.log("Mot de passe pour tous les comptes : password123");
+  console.log("Seed terminé : mix de santé attendu : Rocker = Sain, Falcon = À surveiller, Solid/DMi/B2C = Critique.");
+  console.log(`Mot de passe pour tous les comptes de démo : ${password}`);
+  if (!process.env.SEED_DEMO_PASSWORD) {
+    console.log("(mot de passe aléatoire, affiché une seule fois : note-le maintenant)");
+  }
   console.log("Comptes : admin@demo.local, pm-rocker@demo.local, pm-solid@demo.local, pm-falcon@demo.local, pm-dmi@demo.local, pm-b2c@demo.local");
 }
 
@@ -240,3 +270,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

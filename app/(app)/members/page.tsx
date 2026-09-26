@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { InviteLinkGenerator } from "@/components/invite-link-generator";
-import { ShieldAlert, User } from "lucide-react";
+import { MemberList } from "@/components/member-list";
+import { ShieldAlert } from "lucide-react";
 
 export default async function MembersPage() {
   const session = await getServerSession(authOptions);
@@ -29,7 +30,7 @@ export default async function MembersPage() {
 
   const members = await prisma.membership.findMany({
     where: { workspaceId: membership.workspaceId },
-    include: { user: { select: { name: true, email: true } } },
+    include: { user: { select: { id: true, name: true, email: true } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -42,27 +43,17 @@ export default async function MembersPage() {
 
       <InviteLinkGenerator workspaceId={membership.workspaceId} />
 
-      <div className="rounded-lg border border-border bg-surface">
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-            Membres actuels ({members.length})
-          </h2>
-        </div>
-        <ul className="divide-y divide-border">
-          {members.map((m) => (
-            <li key={m.id} className="flex items-center gap-3 px-5 py-3.5">
-              <User size={14} className="text-ink-muted" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-ink">{m.user.name}</p>
-                <p className="text-xs text-ink-muted">{m.user.email}</p>
-              </div>
-              <span className="rounded-full bg-background px-2.5 py-0.5 text-xs font-medium text-ink-muted">
-                {m.role === "ADMIN" ? "Admin" : "Membre"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <MemberList
+        workspaceId={membership.workspaceId}
+        currentUserId={session.user.id}
+        members={members.map((m) => ({
+          userId: m.user.id,
+          name: m.user.name,
+          email: m.user.email,
+          role: m.role,
+        }))}
+      />
     </div>
   );
 }
+

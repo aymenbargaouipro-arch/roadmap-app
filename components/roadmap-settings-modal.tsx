@@ -261,7 +261,7 @@ export function RoadmapSettingsModal({
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                        accept="image/png,image/jpeg,image/webp"
                         className="hidden"
                         onChange={handleFileChange}
                       />
@@ -411,3 +411,4 @@ export function RoadmapSettingsModal({
     </>
   );
 }
+

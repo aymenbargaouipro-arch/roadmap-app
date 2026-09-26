@@ -2,22 +2,16 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireRoadmapMember } from "@/lib/access";
+import { validateLogoDataUrl } from "@/lib/validation";
 import { isValidRoadmapColor, MAX_LOGO_BYTES } from "@/lib/roadmap-theme";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
-  const roadmap = await prisma.roadmap.findUnique({
-    where: { id: params.id },
-    select: { workspaceId: true },
-  });
-  if (!roadmap) return NextResponse.json({ error: "Roadmap introuvable." }, { status: 404 });
-
-  const membership = await prisma.membership.findFirst({
-    where: { userId: session.user.id, workspaceId: roadmap.workspaceId },
-  });
-  if (!membership) return NextResponse.json({ error: "Accès refusé." }, { status: 403 });
+  const access = await requireRoadmapMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Corps de requête invalide." }, { status: 400 });
@@ -52,14 +46,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     data.icon = String(body.icon).slice(0, 8);
     data.logoUrl = null;
   } else if (body.logoUrl !== undefined && body.logoUrl) {
+    // PNG, JPEG ou WebP uniquement, verifie sur les octets reels (audit L3) : le SVG est
+    // refuse car il peut embarquer du script.
     const value = String(body.logoUrl);
-    if (!value.startsWith("data:image/")) {
-      return NextResponse.json({ error: "Format d'image invalide." }, { status: 400 });
-    }
     if (value.length > MAX_LOGO_BYTES * 1.4) {
       return NextResponse.json({ error: "Image trop lourde (500 Ko max)." }, { status: 400 });
     }
-    data.logoUrl = value;
+    const logo = validateLogoDataUrl(value, MAX_LOGO_BYTES);
+    if (!logo.ok) return NextResponse.json({ error: logo.error }, { status: 400 });
+    data.logoUrl = logo.dataUrl;
     data.icon = null;
   } else if (body.icon !== undefined || body.logoUrl !== undefined) {
     // L'un des deux a ete envoye explicitement a vide/null : on efface les deux
@@ -77,17 +72,9 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
 
-  const roadmap = await prisma.roadmap.findUnique({
-    where: { id: params.id },
-    select: { workspaceId: true },
-  });
-  if (!roadmap) return NextResponse.json({ error: "Roadmap introuvable." }, { status: 404 });
-
-  const membership = await prisma.membership.findFirst({
-    where: { userId: session.user.id, workspaceId: roadmap.workspaceId },
-  });
-  if (!membership) return NextResponse.json({ error: "Accès refusé." }, { status: 403 });
-  if (membership.role !== "ADMIN") {
+  const access = await requireRoadmapMember(params.id, session.user.id);
+  if (!access.ok) return access.response;
+  if (access.role !== "ADMIN") {
     return NextResponse.json({ error: "Seul un administrateur peut supprimer une roadmap." }, { status: 403 });
   }
 
@@ -121,3 +108,4 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   return NextResponse.json({ success: true });
 }
+

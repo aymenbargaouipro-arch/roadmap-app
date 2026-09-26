@@ -17,9 +17,11 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
+        if (typeof credentials.email !== "string" || typeof credentials.password !== "string") return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        // Recherche insensible a la casse : "Aymen@..." et "aymen@..." designent le meme compte.
+        const user = await prisma.user.findFirst({
+          where: { email: { equals: credentials.email.trim(), mode: "insensitive" } },
         });
         if (!user) return null;
 
@@ -41,3 +43,4 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+
