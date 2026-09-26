@@ -21,7 +21,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={inter.variable}>
-      <body>{children}</body>
+      {/* suppressHydrationWarning : certaines extensions de navigateur ajoutent des attributs
+          sur <body> avant le chargement de React (ex : class="mci-..."). React ignore alors
+          ces differences d'attributs sur cette seule balise, pas sur son contenu. */}
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }
