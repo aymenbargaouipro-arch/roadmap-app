@@ -39,7 +39,9 @@ function LoginForm() {
     setLoading(false);
 
     if (res?.error) {
-      setError("Email ou mot de passe incorrect.");
+      // Meme message pour un mauvais mot de passe et pour un compte temporairement bloque
+      // apres plusieurs echecs (audit M1) : rien n'indique lequel des deux s'applique.
+      setError("Email ou mot de passe incorrect. Après plusieurs échecs, patiente 15 minutes avant de réessayer.");
       return;
     }
     router.push(next || "/dashboard");
