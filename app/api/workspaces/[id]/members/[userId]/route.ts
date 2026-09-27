@@ -69,13 +69,15 @@ export async function DELETE(_req: Request, props: { params: Promise<{ id: strin
 
   // Le retrait prend effet immediatement : chaque requete reverifie l'appartenance au
   // workspace (lib/access.ts). Les items dont il etait responsable dans cet espace sont
-  // desassignes, pour ne pas garder un responsable qui n'y a plus acces.
+  // desassignes, pour ne pas garder un responsable qui n'y a plus acces. Ses sessions ouvertes
+  // sont aussi revoquees (audit M1-c) : il devra se reconnecter.
   await prisma.$transaction([
     prisma.item.updateMany({
       where: { ownerId: params.userId, roadmap: { workspaceId: params.id } },
       data: { ownerId: null },
     }),
     prisma.membership.delete({ where: { id: target.id } }),
+    prisma.user.update({ where: { id: params.userId }, data: { sessionVersion: { increment: 1 } } }),
   ]);
 
   return NextResponse.json({ ok: true });

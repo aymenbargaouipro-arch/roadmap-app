@@ -16,6 +16,11 @@ model User {
   name         String
   createdAt    DateTime     @default(now())
 
+  // Version des sessions (audit M1-c) : recopiee dans le jeton a la connexion. L'augmenter
+  // revoque toutes les sessions ouvertes du compte (bouton "tous les appareils", retrait
+  // d'un espace).
+  sessionVersion Int        @default(0)
+
   memberships  Membership[]
   ownedItems   Item[]       @relation("ItemOwner")
 }
@@ -49,6 +54,17 @@ model Workspace {
   memberships Membership[]
   roadmaps    Roadmap[]
   invites     Invite[]
+}
+
+// Compteurs de limitation de debit (audit M1-c), stockes en base pour survivre aux
+// redemarrages du serveur et etre partages entre plusieurs copies. La cle est une empreinte
+// SHA-256 (ni email ni adresse IP en clair). Voir lib/rate-limit.ts.
+model RateLimitBucket {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
 }
 
 enum Role {

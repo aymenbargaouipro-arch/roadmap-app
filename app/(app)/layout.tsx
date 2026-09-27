@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
+import { SessionKeepAlive } from "@/components/session-keep-alive";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -17,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-background">
+      <SessionKeepAlive />
       <Sidebar
         workspaceName={membership?.workspace.name ?? "Aucun espace"}
         isAdmin={membership?.role === "ADMIN"}

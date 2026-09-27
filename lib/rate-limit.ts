@@ -1,56 +1,64 @@
-// Limitation de debit simple, en memoire (audit M1, partie debit).
-//
-// Suffisant tant que l'application tourne sur un seul serveur (cas actuel : un seul process
-// Node). Les compteurs repartent a zero a chaque redemarrage du serveur. Si l'app passe un
-// jour sur plusieurs instances, il faudra un stockage partage (Postgres ou Redis).
-//
-// Stocke sur globalThis pour survivre aux rechargements a chaud de Next.js en developpement.
+import { createHash } from "crypto";
+import { prisma } from "@/lib/prisma";
 
-type Bucket = { count: number; resetAt: number };
-
-const globalStore = globalThis as unknown as { __apexRateLimit?: Map<string, Bucket> };
-const buckets: Map<string, Bucket> = globalStore.__apexRateLimit ?? new Map();
-globalStore.__apexRateLimit = buckets;
+// Limitation de debit, compteurs stockes dans PostgreSQL (audit M1-c).
+//
+// Les compteurs survivent aux redemarrages du serveur (infrastructure qui arrete le serveur
+// apres une periode d'inactivite) et sont partages entre plusieurs copies du serveur. Chaque
+// increment est une seule requete SQL atomique. Les cles sont stockees sous forme d'empreinte
+// SHA-256 : ni email ni adresse IP en clair dans la table.
 
 export type RateLimitResult = { allowed: true } | { allowed: false; retryAfterSeconds: number };
 
+type BucketRow = { count: number; retryAfter: number };
+
+function bucketId(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+// Menage occasionnel des compteurs expires depuis plus d'un jour (1 appel sur 100).
+function maybeCleanup(): void {
+  if (Math.random() >= 0.01) return;
+  prisma.$executeRaw`DELETE FROM "RateLimitBucket" WHERE "resetAt" < now() - interval '1 day'`.catch((err) =>
+    console.error("[rate-limit] menage impossible :", err)
+  );
+}
+
 /**
- * Compte un appel pour `key` dans une fenetre fixe de `windowMs`.
- * Refuse des que `limit` appels ont deja ete comptes dans la fenetre en cours.
+ * Compte un appel pour `key` dans une fenetre fixe de `windowMs`, et dit si le total reste
+ * dans `limit`. La fenetre repart de zero des qu'elle est expiree.
  */
-export function hit(key: string, limit: number, windowMs: number): RateLimitResult {
-  const now = Date.now();
-
-  // Menage opportuniste pour que la Map ne grossisse pas indefiniment.
-  if (buckets.size > 10_000) {
-    for (const [k, b] of buckets) if (b.resetAt <= now) buckets.delete(k);
-  }
-
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true };
-  }
-
-  if (bucket.count >= limit) {
-    return { allowed: false, retryAfterSeconds: Math.ceil((bucket.resetAt - now) / 1000) };
-  }
-
-  bucket.count += 1;
-  return { allowed: true };
+export async function hit(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
+  const id = bucketId(key);
+  const rows = await prisma.$queryRaw<BucketRow[]>`
+    INSERT INTO "RateLimitBucket" ("key", "count", "resetAt")
+    VALUES (${id}, 1, now() + (${windowMs}::int * interval '1 millisecond'))
+    ON CONFLICT ("key") DO UPDATE SET
+      "count" = CASE WHEN "RateLimitBucket"."resetAt" <= now() THEN 1 ELSE "RateLimitBucket"."count" + 1 END,
+      "resetAt" = CASE WHEN "RateLimitBucket"."resetAt" <= now() THEN EXCLUDED."resetAt" ELSE "RateLimitBucket"."resetAt" END
+    RETURNING "count", GREATEST(CEIL(EXTRACT(EPOCH FROM ("resetAt" - now()))), 1)::int AS "retryAfter"`;
+  maybeCleanup();
+  const row = rows[0];
+  if (!row || row.count <= limit) return { allowed: true };
+  return { allowed: false, retryAfterSeconds: row.retryAfter };
 }
 
 /** Comme hit, mais sans rien compter : dit seulement si `key` a deja atteint `limit`. */
-export function peek(key: string, limit: number): RateLimitResult {
-  const now = Date.now();
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt <= now || bucket.count < limit) return { allowed: true };
-  return { allowed: false, retryAfterSeconds: Math.ceil((bucket.resetAt - now) / 1000) };
+export async function peek(key: string, limit: number): Promise<RateLimitResult> {
+  const id = bucketId(key);
+  const rows = await prisma.$queryRaw<BucketRow[]>`
+    SELECT "count", GREATEST(CEIL(EXTRACT(EPOCH FROM ("resetAt" - now()))), 1)::int AS "retryAfter"
+    FROM "RateLimitBucket"
+    WHERE "key" = ${id} AND "resetAt" > now()`;
+  const row = rows[0];
+  if (!row || row.count < limit) return { allowed: true };
+  return { allowed: false, retryAfterSeconds: row.retryAfter };
 }
 
 /** Remet a zero le compteur de `key`. */
-export function reset(key: string): void {
-  buckets.delete(key);
+export async function reset(key: string): Promise<void> {
+  const id = bucketId(key);
+  await prisma.$executeRaw`DELETE FROM "RateLimitBucket" WHERE "key" = ${id}`;
 }
 
 function formatWait(seconds: number): string {
@@ -61,11 +69,11 @@ function formatWait(seconds: number): string {
 }
 
 // --- Adresse IP du client -------------------------------------------------------------------
-// En production, Apex doit etre derriere un proxy inverse (Caddy) qui renseigne
-// X-Forwarded-For avec l'adresse reelle du client, et le port de Node ne doit pas etre expose
-// directement : sinon l'en-tete peut etre invente par le client. On prend la DERNIERE valeur,
-// celle ajoutee par le proxy le plus proche. Sans en-tete (developpement local), toutes les
-// requetes partagent le meme compteur, ce qui reste sans danger.
+// En production, Apex doit etre derriere un proxy inverse qui renseigne X-Forwarded-For avec
+// l'adresse reelle du client, et le port de Node ne doit pas etre expose directement : sinon
+// l'en-tete peut etre invente par le client. On prend la DERNIERE valeur, celle ajoutee par le
+// proxy le plus proche. Sans en-tete (developpement local), toutes les requetes partagent le
+// meme compteur, ce qui reste sans danger.
 
 export function clientIpFromHeaders(get: (name: string) => string | null | undefined): string {
   const forwarded = get("x-forwarded-for");
@@ -93,17 +101,23 @@ const loginEmailKey = (email: string) => `login:email:${email}`;
 const loginIpKey = (ip: string) => `login:ip:${ip}`;
 
 /** Vrai si une tentative de connexion doit etre refusee sans meme verifier le mot de passe. */
-export function isLoginBlocked(email: string, ip: string): boolean {
-  return !peek(loginEmailKey(email), LOGIN_FAILURES_PER_EMAIL).allowed || !peek(loginIpKey(ip), LOGIN_FAILURES_PER_IP).allowed;
+export async function isLoginBlocked(email: string, ip: string): Promise<boolean> {
+  const [byEmail, byIp] = await Promise.all([
+    peek(loginEmailKey(email), LOGIN_FAILURES_PER_EMAIL),
+    peek(loginIpKey(ip), LOGIN_FAILURES_PER_IP),
+  ]);
+  return !byEmail.allowed || !byIp.allowed;
 }
 
-export function recordLoginFailure(email: string, ip: string): void {
-  hit(loginEmailKey(email), LOGIN_FAILURES_PER_EMAIL, LOGIN_WINDOW_MS);
-  hit(loginIpKey(ip), LOGIN_FAILURES_PER_IP, LOGIN_WINDOW_MS);
+export async function recordLoginFailure(email: string, ip: string): Promise<void> {
+  await Promise.all([
+    hit(loginEmailKey(email), LOGIN_FAILURES_PER_EMAIL, LOGIN_WINDOW_MS),
+    hit(loginIpKey(ip), LOGIN_FAILURES_PER_IP, LOGIN_WINDOW_MS),
+  ]);
 }
 
-export function clearLoginFailures(email: string): void {
-  reset(loginEmailKey(email));
+export async function clearLoginFailures(email: string): Promise<void> {
+  await reset(loginEmailKey(email));
 }
 
 // --- Inscription (audit M1) -----------------------------------------------------------------
@@ -117,14 +131,14 @@ const REGISTER_WINDOW_MS = 60 * 60 * 1000; // 1 heure
 const registerIpKey = (ip: string) => `register:ip:${ip}`;
 
 /** Renvoie null si l'inscription peut etre tentee, sinon le message d'erreur a afficher. */
-export function checkRegisterRateLimit(ip: string): string | null {
-  const result = peek(registerIpKey(ip), REGISTER_FAILURES_PER_IP);
+export async function checkRegisterRateLimit(ip: string): Promise<string | null> {
+  const result = await peek(registerIpKey(ip), REGISTER_FAILURES_PER_IP);
   if (result.allowed) return null;
   return `Trop de tentatives d'inscription. Réessaie dans ${formatWait(result.retryAfterSeconds)}.`;
 }
 
-export function recordRegisterFailure(ip: string): void {
-  hit(registerIpKey(ip), REGISTER_FAILURES_PER_IP, REGISTER_WINDOW_MS);
+export async function recordRegisterFailure(ip: string): Promise<void> {
+  await hit(registerIpKey(ip), REGISTER_FAILURES_PER_IP, REGISTER_WINDOW_MS);
 }
 
 // --- Regles propres aux imports IA -------------------------------------------------------
@@ -146,7 +160,7 @@ function instanceAiDailyLimit(): number {
 }
 
 /** Renvoie null si l'import est autorise, sinon le message d'erreur a afficher. */
-export function checkImportRateLimit(userId: string, workspaceId: string): string | null {
+export async function checkImportRateLimit(userId: string, workspaceId: string): Promise<string | null> {
   const userKey = `import:user:${userId}`;
   const workspaceKey = `import:ws:${workspaceId}`;
   const instanceKey = "import:instance";
@@ -154,25 +168,27 @@ export function checkImportRateLimit(userId: string, workspaceId: string): strin
 
   // On verifie les trois plafonds AVANT de compter : une analyse refusee par l'un d'eux ne
   // consomme rien dans les autres.
-  const perUser = peek(userKey, IMPORT_PER_USER_LIMIT);
+  const perUser = await peek(userKey, IMPORT_PER_USER_LIMIT);
   if (!perUser.allowed) {
     return `Trop d'analyses d'import en peu de temps. Réessaie dans ${formatWait(perUser.retryAfterSeconds)}.`;
   }
-  const perWorkspace = peek(workspaceKey, IMPORT_PER_WORKSPACE_DAILY_LIMIT);
+  const perWorkspace = await peek(workspaceKey, IMPORT_PER_WORKSPACE_DAILY_LIMIT);
   if (!perWorkspace.allowed) {
     return `Le quota quotidien d'analyses d'import de l'espace de travail est atteint. Réessaie dans ${formatWait(
       perWorkspace.retryAfterSeconds
     )}.`;
   }
-  const perInstance = peek(instanceKey, instanceLimit);
+  const perInstance = await peek(instanceKey, instanceLimit);
   if (!perInstance.allowed) {
     return `Le quota quotidien d'analyses par IA de cette instance Apex est atteint. Réessaie dans ${formatWait(
       perInstance.retryAfterSeconds
     )}.`;
   }
 
-  hit(userKey, IMPORT_PER_USER_LIMIT, IMPORT_PER_USER_WINDOW_MS);
-  hit(workspaceKey, IMPORT_PER_WORKSPACE_DAILY_LIMIT, DAY_MS);
-  hit(instanceKey, instanceLimit, DAY_MS);
+  await Promise.all([
+    hit(userKey, IMPORT_PER_USER_LIMIT, IMPORT_PER_USER_WINDOW_MS),
+    hit(workspaceKey, IMPORT_PER_WORKSPACE_DAILY_LIMIT, DAY_MS),
+    hit(instanceKey, instanceLimit, DAY_MS),
+  ]);
   return null;
 }

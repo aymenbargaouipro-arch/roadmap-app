@@ -1,9 +1,14 @@
 import { randomBytes } from "crypto";
-import { NextAuthOptions } from "next-auth";
+import type { NextAuthOptions, Session } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { clearLoginFailures, clientIpFromHeaders, isLoginBlocked, recordLoginFailure } from "@/lib/rate-limit";
+
+// Duree de vie d'une session sans activite (audit M1-c). Le jeton est renouvele tant que la
+// personne utilise l'application (voir components/session-keep-alive.tsx).
+export const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60; // 8 heures
 
 // Empreinte factice, calculee une seule fois avec le meme cout que les vrais mots de passe
 // (10) : quand l'email n'existe pas, on la compare quand meme, pour que la reponse prenne le
@@ -26,8 +31,14 @@ function headerReader(headers: unknown) {
   };
 }
 
+// Jeton revoque (audit M1-c) : il ne porte plus aucune identite, et le reste a chaque
+// renouvellement. La personne doit se reconnecter.
+function revokedToken(): JWT {
+  return { id: "", revoked: true };
+}
+
 export const authOptions: NextAuthOptions = {
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: SESSION_MAX_AGE_SECONDS },
   pages: {
     signIn: "/login",
   },
@@ -47,7 +58,7 @@ export const authOptions: NextAuthOptions = {
 
         // Trop d'echecs recents pour cet email ou cette IP : refus immediat, avec exactement
         // la meme reponse qu'un mauvais mot de passe (audit M1, limitation de debit).
-        if (isLoginBlocked(email, ip)) return null;
+        if (await isLoginBlocked(email, ip)) return null;
 
         // Recherche insensible a la casse : "Aymen@..." et "aymen@..." designent le meme compte.
         const user = await prisma.user.findFirst({
@@ -62,22 +73,44 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (!user || !valid) {
-          recordLoginFailure(email, ip);
+          await recordLoginFailure(email, ip);
           return null;
         }
 
-        clearLoginFailures(email);
-        return { id: user.id, email: user.email, name: user.name };
+        await clearLoginFailures(email);
+        return { id: user.id, email: user.email, name: user.name, sessionVersion: user.sessionVersion };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
-      if (user) token.id = user.id;
+      // Connexion : on memorise dans le jeton la version de session du compte.
+      if (user) {
+        token.id = user.id;
+        token.sessionVersion = user.sessionVersion ?? 0;
+        return token;
+      }
+
+      // Jeton deja revoque : il le reste.
+      if (token.revoked || !token.id) return revokedToken();
+
+      // Chaque lecture de session verifie en base que le jeton n'a pas ete revoque (bouton
+      // "tous les appareils", retrait d'un espace) et que le compte existe toujours.
+      const current = await prisma.user.findUnique({
+        where: { id: token.id },
+        select: { sessionVersion: true },
+      });
+      if (!current || current.sessionVersion !== (token.sessionVersion ?? 0)) return revokedToken();
+
       return token;
     },
     async session({ session, token }) {
-      if (session.user) (session.user as { id?: string }).id = token.id as string;
+      // Jeton revoque : session sans utilisateur. Chaque page renvoie alors vers la connexion,
+      // chaque route API repond 401, exactement comme sans session.
+      if (token.revoked || !token.id) {
+        return { expires: session.expires } as unknown as Session;
+      }
+      if (session.user) session.user.id = token.id;
       return session;
     },
   },
