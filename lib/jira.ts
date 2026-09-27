@@ -261,8 +261,9 @@ export async function searchJiraIssues(
       return { ok: false, error: "Impossible de joindre Jira pour récupérer les tickets." };
     }
     if (!res.ok) {
-      const bodyText = await res.text().catch(() => "");
-      console.error("[jira] Statut", res.status, "lors de la recherche d'issues :", bodyText.slice(0, 500));
+      // Corps de reponse jamais journalise (audit restes) : statut seul.
+      await res.body?.cancel().catch(() => undefined);
+      console.error("[jira] Statut", res.status, "lors de la recherche d'issues.");
       return { ok: false, error: `Erreur Jira (${res.status}) lors de la récupération des tickets.` };
     }
 
@@ -337,8 +338,9 @@ export async function updateJiraIssueDates(
     return { ok: false, error: "Impossible de joindre Jira pour mettre a jour les dates." };
   }
   if (!res.ok) {
-    const bodyText = await res.text().catch(() => "");
-    console.error("[jira] Statut", res.status, "lors de l'ecriture des dates sur", issueKey, ":", bodyText.slice(0, 500));
+    // Corps de reponse jamais journalise (audit restes) : statut et cle du ticket seulement.
+    await res.body?.cancel().catch(() => undefined);
+    console.error("[jira] Statut", res.status, "lors de l'ecriture des dates sur", issueKey);
     return { ok: false, error: `Jira a refuse la mise a jour des dates (${res.status}).` };
   }
   return { ok: true };

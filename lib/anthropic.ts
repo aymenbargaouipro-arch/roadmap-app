@@ -125,7 +125,10 @@ export type SimpleMapping = z.infer<typeof simpleSheetSchema>;
 function parseWithSchema<S extends z.ZodTypeAny>(schema: S, raw: unknown, context: string): z.infer<S> {
   const result = schema.safeParse(raw);
   if (!result.success) {
-    console.error(`[anthropic] reponse ${context} non conforme :`, result.error.issues.slice(0, 5));
+    // Seuls le chemin et le code de chaque ecart sont journalises, jamais les valeurs recues
+    // (audit restes) : un message zod peut recopier une valeur issue du fichier importe.
+    const issues = result.error.issues.slice(0, 5).map((i) => ({ path: i.path.join("."), code: i.code }));
+    console.error(`[anthropic] reponse ${context} non conforme :`, issues);
     throw new ImportAiError(MSG_BAD_RESPONSE);
   }
   return result.data;
@@ -181,8 +184,10 @@ async function postToClaude(payload: Record<string, unknown>, timeoutMs: number)
   }
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error(`[anthropic] HTTP ${res.status} :`, body.slice(0, 300));
+    // Corps de reponse jamais journalise (audit restes) : statut et identifiant de requete
+    // Anthropic (utile pour le support), rien d'autre.
+    await res.body?.cancel().catch(() => undefined);
+    console.error(`[anthropic] HTTP ${res.status}, request-id ${res.headers.get("request-id") ?? "?"}`);
     throw new ImportAiError(res.status === 429 || res.status === 529 ? MSG_BUSY : MSG_UNAVAILABLE);
   }
 
@@ -214,7 +219,8 @@ function extractJson(text: string): unknown {
   try {
     return JSON.parse(cleaned);
   } catch {
-    console.error("[anthropic] reponse non JSON :", cleaned.slice(0, 200));
+    // Longueur seule (audit restes) : la reponse peut reprendre le contenu du fichier importe.
+    console.error(`[anthropic] reponse non JSON (${cleaned.length} caracteres).`);
     throw new ImportAiError(MSG_BAD_RESPONSE);
   }
 }

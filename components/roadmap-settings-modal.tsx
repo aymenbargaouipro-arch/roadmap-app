@@ -278,7 +278,7 @@ export function RoadmapSettingsModal({
                           Retirer
                         </button>
                       )}
-                      <p className="text-[11px] text-ink-muted">PNG/JPG/SVG/WebP, 500 Ko max.</p>
+                      <p className="text-[11px] text-ink-muted">PNG/JPG/WebP, 500 Ko max.</p>
                     </div>
                   </div>
                 )}

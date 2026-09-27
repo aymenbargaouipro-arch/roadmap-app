@@ -2,6 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireRoadmapMember } from "@/lib/access";
 import { computeHealth } from "@/lib/health";
 import { getWorkspaceHealthThresholds } from "@/lib/health-thresholds";
 import { DEFAULT_ROADMAP_COLOR, withAlpha } from "@/lib/roadmap-theme";
@@ -20,6 +21,12 @@ export default async function RoadmapDetailPage(props: { params: Promise<{ id: s
   const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
+
+  // Controle d'acces AVANT tout chargement (audit I2) : une roadmap inexistante et une
+  // roadmap d'un autre workspace donnent exactement la meme page 404, et aucune donnee d'un
+  // autre workspace n'est lue en base.
+  const access = await requireRoadmapMember(params.id, session.user.id);
+  if (!access.ok) notFound();
 
   const roadmap = await prisma.roadmap.findUnique({
     where: { id: params.id },
@@ -51,11 +58,6 @@ export default async function RoadmapDetailPage(props: { params: Promise<{ id: s
   });
 
   if (!roadmap) notFound();
-
-  const membership = await prisma.membership.findFirst({
-    where: { userId: session.user.id, workspaceId: roadmap.workspaceId },
-  });
-  if (!membership) redirect("/dashboard");
 
   const workspaceItems = await prisma.item.findMany({
     where: { roadmap: { workspaceId: roadmap.workspaceId } },
@@ -182,7 +184,7 @@ export default async function RoadmapDetailPage(props: { params: Promise<{ id: s
                 logoUrl: roadmap.logoUrl,
               }}
             />
-            {membership.role === "ADMIN" && (
+            {access.role === "ADMIN" && (
               <RoadmapDeleteButton roadmapId={roadmap.id} roadmapName={roadmap.name} variant="icon" />
             )}
           </div>
