@@ -1,180 +1,167 @@
-# Apex - Roadmaps multi-équipes
+# Apex - Multi-team roadmap management
 
-## Fonctionnalités en place
+[Français](README.fr.md) · **English**
 
-### Authentification & espace de travail
-- Inscription / connexion (NextAuth)
-- Création d'un workspace, invitation de membres par lien : validité 7 jours, lien Admin à usage unique, lien Membre réutilisable, révocation possible
-- La page d'invitation est accessible sans compte : la personne invitée crée son compte ou se connecte, puis rejoint directement l'espace
-- 2 rôles : Admin / Membre, avec changement de rôle et retrait d'un membre (le dernier admin est protégé)
+Apex is a self-hosted web application to steer several project roadmaps (one per team or product manager) within a single program, with a consolidated view of health, dependencies and risks. It aims to be simple and fast, without the weight of enterprise portfolio tools.
 
-### Roadmaps & items
-- Création de roadmap via une modale intégrée au Dashboard (titre, description, couleur, emoji/logo)
-- Suppression d'une roadmap (réservée à l'Admin), avec modale de confirmation - supprime en cascade tous ses items, jalons, risques et dépendances liées (y compris inter-équipes)
-- Export Excel par roadmap (4 feuilles : Items, Jalons, Risques, Dépendances)
-- Ajout / suppression d'items : titre, dates, statut, % avancement, owner
-- Changement de statut horodaté
-- Hiérarchie Epic / sous-item (un seul niveau) : agrégation automatique des dates et de la progression sur l'Epic, lignes repliables, suppression en cascade avec confirmation
-- Jalons (modèle de données + affichage sur le Gantt)
-- Personnalisation visuelle de chaque roadmap (couleur pastel, emoji ou logo uploadé), reprise de façon cohérente dans toute l'app
+The user interface is in French.
 
-### Vue Gantt
-- Drag-and-drop des dates, poignées de redimensionnement
-- Connecteurs de dépendance en courbes de Bézier avec poignée déplaçable positionnée sur la courbe
-- Bascule pour masquer/afficher les dépendances (vue individuelle et consolidée), utile quand beaucoup de flèches se croisent
-- Zoom Semaine / Mois / Trimestre avec graduations calées sur le vrai calendrier
-- Bandeau calendrier de sprints (date de référence, durée, numéro de départ configurables dans Paramètres), avec extrapolation passé/futur
-- Suivi prévu vs réel : dates planifiées vs dates réelles, extensions pointillées rouge/vert sur les barres
+## Features
 
-### Dépendances
-- 4 types classiques : FD, DD, FF, DF
-- 3 types de cible : Tâche, Équipe, Système externe
-- Statut manuel (Résolue / En attente) sur chaque dépendance
-- Détection et blocage des dépendances circulaires
-- Tableau récapitulatif des dépendances par roadmap (accessible depuis le Gantt et la vue de suivi), avec suppression directe
-- Déduplication des flèches quand un Epic est replié
-- Depuis le tableau Items : ajout d'une dépendance et suppression de l'item regroupés dans un menu dédié par ligne ; le nombre de dépendances d'un item est visible d'un coup d'œil, avec le détail complet au survol
+### Workspaces and access
+- **Private instance**: people join only through an invitation link. The very first account of a new installation can register without an invitation and create the first workspace; after that, registration is closed.
+- Invitation links: valid 7 days, single-use for Admin, reusable for Member, revocable at any time.
+- Two roles per workspace: Admin and Member, with role changes and member removal (the last admin is protected).
+- One account belongs to one workspace (multi-workspace support is planned).
 
-### Risques
-- Liste par roadmap : titre, impact, probabilité
-- Statut : ouvert / mitigé / clos
+### Roadmaps and items
+- Roadmap creation from the dashboard (title, description, color, emoji or logo).
+- Items with title, dates, status, progress and owner; timestamped status changes.
+- Epic / sub-item hierarchy (one level), with automatic aggregation of dates and progress.
+- Milestones, visual customization per roadmap, Excel export (items, milestones, risks, dependencies).
+- Roadmap deletion reserved to admins, with confirmation.
 
-### Dashboard & vue consolidée
-- KPIs globaux, panneau "Attention requise"
-- Graphique de tendance de santé avec infobulles par roadmap
-- Cartes roadmap enrichies (couleur, emoji/logo, statut), avec suppression rapide pour un Admin
-- Statut de santé auto-calculé (vert / orange / rouge), seuils configurables dans Paramètres
-- Filtres instantanés sur la vue consolidée
-- Drill-down vers le détail de chaque roadmap
+### Gantt view
+- Drag-and-drop of dates, resize handles.
+- Dependency connectors drawn as Bezier curves, with a draggable handle.
+- Week / Month / Quarter zoom aligned on the real calendar.
+- Configurable sprint calendar band.
+- Planned vs actual tracking of dates.
 
-### Imports assistés par IA (Claude Haiku)
-- Import Excel : détection automatique de la ligne d'en-tête, mapping des colonnes par l'IA, écran de revue humaine avant import
-- Import depuis une image (capture d'écran d'un tableau ou d'une vue Gantt/swimlane type Bubble Plan, Roadmunk) : détection Epic/sous-item, jalons, owner, % d'avancement
-- Logique de transformation commune aux deux imports (`lib/import-transform.ts`)
+### Dependencies and risks
+- Four dependency types (finish-to-start, start-to-start, finish-to-finish, start-to-finish, shown as FD, DD, FF, DF in the interface) and three target kinds (task, team, external system).
+- Circular dependency detection, dependency summary table per roadmap.
+- Risks per roadmap: impact, probability, status (open, mitigated, closed).
 
-### Intégration Jira Cloud (bidirectionnelle)
-- Connexion au niveau workspace, jetons chiffrés AES-256-GCM (clé dérivée par HKDF, liée au workspace, rotation de clé possible)
-- Mapping projet et champs de date par roadmap (détection date vs date-heure)
-- Synchronisation des Epics et Stories, mapping des statuts
-- Masquage (pas suppression) des items en cas de perte de dates ou de suppression côté Jira
-- Synchronisation des dépendances (liens de type "Blocks")
-- Écriture des dates vers Jira lors des modifications manuelles, recalcul des agrégats d'Epic
-- Bouton de synchronisation globale sur la vue consolidée, avec filtre de seuil de date ("Synchroniser depuis le")
-- Compatible réseau d'entreprise (proxy PAC, `undici` ProxyAgent)
+### Dashboard and consolidated view
+- Global KPIs, "attention required" panel, health trend chart.
+- Automatic health status (green, orange, red) with configurable thresholds.
+- Instant filters and drill-down to each roadmap.
 
-### Interface & design
-- Identité "Apex" : nom, logo (dégradé bleu)
-- Thème sombre uniquement, composants shadcn-style faits main
-- Sidebar réductible avec bouton flottant au survol
-- Police Inter auto-hébergée (évite les problèmes de proxy au démarrage)
-- Écran Paramètres unifié : seuils de santé, calendrier de sprints, connexion Jira
+### AI-assisted imports (Anthropic Claude Haiku)
+- Excel import: header row detection, column mapping by AI, human review before import.
+- Image import (screenshot of a table or of a Gantt / swimlane view).
 
-### Sécurité
-- Contrôle d'accès sur chaque objet : un utilisateur ne voit et ne modifie que les données de son espace (réponse 404 identique pour "inexistant" et "pas à toi")
-- En-têtes de sécurité HTTP (CSP, HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy)
-- Validation stricte des données reçues, logos vérifiés sur leur contenu réel (PNG, JPEG, WebP)
-- Import Excel et IA encadrés : taille de fichier limitée, réponses de l'IA validées, nombre d'analyses limité
-- Intégration Jira limitée aux sites `https://*.atlassian.net`
-- Redirection après connexion limitée aux pages de l'application
-- Démarrage refusé si un secret est absent ou trop faible
+### Jira Cloud integration (two-way)
+- Connection per workspace, API tokens encrypted with AES-256-GCM (HKDF-derived key bound to the workspace, key rotation supported).
+- Project and date field mapping per roadmap, synchronization of epics, stories and "Blocks" links.
+- Items are hidden (never deleted) when dates disappear or issues are removed in Jira.
+- Dates written back to Jira on manual changes.
+- Works behind a corporate proxy (see below).
 
-## Prochaines étapes possibles
+### Interface
+- Dark theme, hand-made shadcn-style components, self-hosted Inter font.
 
-- Détection automatique des lignes de groupement à l'import Excel (mise de côté après la mise en place de la hiérarchie Epic, à revisiter)
-- Connexion SSO (AWS Cognito), en attente des informations de l'équipe
-- Déploiement Hetzner (guide en 15 étapes déjà rédigé, à exécuter)
+## Security
 
----
+- **Object-level access control**: a user only sees and changes the data of their own workspace. "Does not exist" and "not yours" return the same 404, pages included.
+- **Closed registration**: invitation required (except the very first account), generic error messages that do not reveal whether an email is registered.
+- **Login protection**: 3 failures per email and 10 failures per IP address within 15 minutes block new attempts; same response time whether the email exists or not; passwords of at least 12 characters.
+- **Sessions**: expire after 8 hours of inactivity and are renewed while the person is active. "All devices" (top bar) signs out every session of the account; removing a member also revokes their sessions.
+- **Cost control**: AI analyses are limited per user, per workspace and for the whole instance (30 per day by default, see `APEX_AI_DAILY_LIMIT`).
+- Rate-limit counters are stored in PostgreSQL: they survive restarts and are shared between server instances. Keys are stored as SHA-256 hashes (no email or IP address in clear).
+- HTTP security headers (CSP, HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy).
+- Strict validation of all incoming data; uploaded logos checked on their actual bytes (PNG, JPEG, WebP).
+- Jira integration restricted to `https://*.atlassian.net`, no redirects followed.
+- No external response body and no imported file content is ever written to the server logs.
+- The application refuses to start if a secret is missing or too weak.
 
-## Installation sur Windows
+## Installation (development)
 
-### Prérequis
+### Prerequisites
 
-1. **Node.js** (version 24) - https://nodejs.org (version LTS)
-2. **Docker Desktop** - https://www.docker.com/products/docker-desktop (doit être lancé avant de démarrer la base de données)
+1. **Node.js 24** - https://nodejs.org
+2. **Docker Desktop** (or Docker Engine) - https://www.docker.com, running before you start the database.
 
-Vérifie que tout est installé :
+### Steps
 
-```powershell
-node -v
-docker -v
-```
-
-### Étapes
-
-1. Ouvre un terminal dans le dossier `roadmap-app`.
-
-2. Installe les dépendances :
-   ```powershell
+1. Install the dependencies:
+   ```bash
    npm install
    ```
-
-3. Crée ton fichier d'environnement :
-   ```powershell
-   copy .env.example .env
+2. Create your environment file and replace every example value (instructions are in the file):
+   ```bash
+   cp .env.example .env        # Windows PowerShell: copy .env.example .env
    ```
-   Remplace ensuite chaque valeur d'exemple (les instructions sont dans le fichier). L'application refuse de démarrer si `NEXTAUTH_SECRET` garde sa valeur d'exemple ou fait moins de 32 caractères.
-
-4. Démarre la base de données PostgreSQL :
-   ```powershell
+   The application refuses to start if `NEXTAUTH_SECRET` keeps its example value or is shorter than 32 characters.
+3. Start PostgreSQL (published on `127.0.0.1:5432` only):
+   ```bash
    docker compose up -d
    ```
-   Vérifie : `docker ps` doit afficher un conteneur `roadmap-db`.
-
-5. Crée les tables en base :
-   ```powershell
-   npx prisma migrate dev --name init
+4. Create the tables:
+   ```bash
+   npx prisma migrate deploy
    ```
-
-6. Charge le jeu de données de démo (optionnel mais recommandé) :
-   ```powershell
-   npm run db:seed
-   ```
-   Crée un workspace de démo avec plusieurs roadmaps (Rocker, Solid, Falcon, DMi, B2C), des items, des risques et des dépendances inter-équipes. Comptes : `admin@demo.local` / `pm-a@demo.local` / `pm-b@demo.local`. Le mot de passe est aléatoire, sauf si tu en fixes un avec `SEED_DEMO_PASSWORD` dans `.env` (12 caractères minimum).
-
-   Attention : relancer le seed efface puis recrée le workspace de démo. Il est refusé en production.
-
-7. Lance l'application :
-   ```powershell
+5. Choose **one** of the two options:
+   - **Demo data**: `npm run db:seed` creates a demo workspace with several roadmaps, items, risks and cross-team dependencies. Accounts: `admin@demo.local` and one PM per team (`pm-rocker@demo.local`, `pm-solid@demo.local`, `pm-falcon@demo.local`, `pm-dmi@demo.local`, `pm-b2c@demo.local`). The password is random unless you set `SEED_DEMO_PASSWORD` (12 characters minimum) in `.env`. Running the seed again erases and recreates the demo workspace; it is refused in production.
+   - **Empty instance**: start the application, open `/register` and create the first account, then create your workspace and invite your team from the Members page.
+6. Start the application:
+   ```bash
    npm run dev
    ```
-   Ouvre http://localhost:3000
+   Open http://localhost:3000
 
-### Pour arrêter / relancer
+### Stop / restart
 
-- Arrêter l'app : `Ctrl+C`
-- Arrêter la base : `docker compose down` (les données restent dans `postgres-data/`)
-- Relancer : `docker compose up -d` puis `npm run dev`
+- Stop the app: `Ctrl+C`
+- Stop the database: `docker compose down` (data stays in `postgres-data/`)
+- Restart: `docker compose up -d`, then `npm run dev`
 
-### Réseau d'entreprise CRIT
+### Corporate network with a proxy
 
-Derrière le proxy CRIT (au bureau ou en VPN) :
+If outgoing traffic must go through a proxy:
 
-1. Dans `.env`, décommente la ligne `JIRA_HTTP_PROXY`. Hors réseau CRIT (télétravail sans VPN), elle doit rester commentée, sinon les appels à Jira et Anthropic échouent.
-2. Le proxy inspecte le trafic HTTPS avec son propre certificat. Pour que Node lui fasse confiance sans désactiver la vérification des certificats, définis une fois pour toutes cette variable Windows, puis ouvre une nouvelle fenêtre PowerShell :
+1. Set `JIRA_HTTP_PROXY` in `.env` (despite its name, it is used for both Jira and Anthropic). Leave it commented out when you are not behind the proxy, otherwise these calls fail.
+2. If the proxy inspects HTTPS traffic with its own certificate, let Node trust your system certificates instead of disabling verification. Set the variable **in the system environment, not in `.env`** (Node reads it before `.env` is loaded), then open a new terminal:
    ```powershell
-   [Environment]::SetEnvironmentVariable("NODE_USE_SYSTEM_CA", "1", "User")
+   [Environment]::SetEnvironmentVariable("NODE_USE_SYSTEM_CA", "1", "User")   # Windows
    ```
-   Node utilise alors aussi les certificats de confiance de Windows, où le certificat racine de CRIT est installé. N'utilise jamais `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+   ```bash
+   export NODE_USE_SYSTEM_CA=1                                                  # macOS / Linux
+   ```
+   If that is not enough, point `NODE_EXTRA_CA_CERTS` to the proxy root certificate file. Never use `NODE_TLS_REJECT_UNAUTHORIZED=0`.
 
-### Vérifier avant un déploiement
+## Configuration
 
-```powershell
-npx tsc --noEmit
-npm run build
-npm audit
-```
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | yes | PostgreSQL connection string |
+| `NEXTAUTH_SECRET` | yes | Session signing secret, 32 random characters minimum. Changing it signs everyone out |
+| `NEXTAUTH_URL` | yes | Public URL of the application |
+| `JIRA_ENCRYPTION_KEY` | yes | Encryption key for Jira API tokens, 32 random characters minimum |
+| `JIRA_ENCRYPTION_KEY_PREVIOUS` | no | Previous key, only during a key rotation |
+| `ANTHROPIC_API_KEY` | for AI imports | Anthropic API key |
+| `APEX_AI_DAILY_LIMIT` | no | AI analyses per day for the whole instance (default 30) |
+| `JIRA_HTTP_PROXY` | no | Outgoing HTTP proxy for Jira and Anthropic |
+| `SEED_DEMO_PASSWORD` | no | Fixed password for the demo accounts |
 
-### Outils utiles
+## Before going to production
 
-```powershell
+- Put Apex behind an **HTTPS reverse proxy** that sets `X-Forwarded-For` with the real client address, and never expose the Node port directly: IP-based limits rely on this header.
+- Use strong, unique secrets, and set `NEXTAUTH_URL` to the public URL.
+- Apply migrations with `npx prisma migrate deploy`, never with `migrate dev`.
+- **Create the first account right after deployment**: until an account exists, anyone who reaches the instance can register as its first user.
+- Set up automatic PostgreSQL backups.
+- Check before each release:
+  ```bash
+  npx tsc --noEmit
+  npm run build
+  npm audit
+  ```
+
+## Roadmap
+
+- Single sign-on (OpenID Connect).
+- Multi-workspace accounts with a workspace switcher.
+- Transactional emails: email verification, password reset, invitations bound to an email address.
+- Content Security Policy with nonces.
+
+## Tech stack
+
+Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Prisma · NextAuth · Tailwind CSS · shadcn-style components · Anthropic Claude Haiku · Jira Cloud API · SheetJS · Docker Compose
+
+## Useful tools
+
+```bash
 npx prisma studio
 ```
-
----
-
-## Stack technique
-
-Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Prisma · NextAuth · Tailwind CSS · composants shadcn-style faits main · Claude Haiku (import Excel/image, via `undici` ProxyAgent) · Jira Cloud API (sync bidirectionnelle, jetons AES-256-GCM) · Docker Compose · SheetJS (export Excel)
-
-Coût : **0€** en local. Passage sur Hetzner documenté séparément (guide de déploiement en 15 étapes).
