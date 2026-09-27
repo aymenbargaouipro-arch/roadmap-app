@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import type { Role } from "@prisma/client";
+import type { Prisma, Role } from "@prisma/client";
 
 // Regles des liens d'invitation (audit M2).
 // - Tout lien expire apres INVITE_TTL_DAYS jours.
@@ -36,4 +36,26 @@ export function inviteState(invite: InviteLike, now = new Date()): InviteState {
   if (!invite.expiresAt || invite.expiresAt <= now) return "expired";
   if (invite.maxUses != null && invite.useCount >= invite.maxUses) return "exhausted";
   return "active";
+}
+
+/**
+ * Consomme une utilisation du lien, de facon atomique : l'ecriture ne passe que si le lien est
+ * toujours actif AU MOMENT de l'ecriture. Deux personnes qui utilisent en meme temps un lien a
+ * usage unique ne peuvent donc pas l'utiliser toutes les deux. Renvoie false si le lien n'est
+ * plus utilisable. Partagee par l'inscription et l'acceptation d'invitation (audit M1).
+ */
+export async function consumeInvite(
+  tx: Prisma.TransactionClient,
+  invite: { id: string; maxUses: number | null }
+): Promise<boolean> {
+  const consumed = await tx.invite.updateMany({
+    where: {
+      id: invite.id,
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+      ...(invite.maxUses != null ? { useCount: { lt: invite.maxUses } } : {}),
+    },
+    data: { useCount: { increment: 1 } },
+  });
+  return consumed.count > 0;
 }

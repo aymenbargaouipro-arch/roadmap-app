@@ -1,67 +1,37 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { checkWorkspaceCreation } from "@/lib/instance-access";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { WorkspaceCreateForm } from "@/components/workspace-create-form";
 
-export default function NewWorkspacePage() {
-  const router = useRouter();
-  const [name, setName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+// Page vers laquelle sont renvoyes les comptes sans espace. Sur une instance privee (audit M1),
+// le formulaire de creation n'apparait que pour l'amorcage (aucun espace dans l'instance) ;
+// sinon, la page explique comment rejoindre un espace.
+export default async function NewWorkspacePage() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) redirect("/login");
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const res = await fetch("/api/workspaces", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-
-    setLoading(false);
-
-    if (!res.ok) {
-      setError("Impossible de créer l'espace. Réessayez.");
-      return;
-    }
-    router.push("/dashboard");
-    router.refresh();
-  }
+  const check = await checkWorkspaceCreation(prisma, session.user.id);
+  if (!check.allowed && check.reason === "already_member") redirect("/dashboard");
 
   return (
     <div className="mx-auto max-w-md">
       <Card>
         <CardHeader>
-          <CardTitle>Créer votre espace de travail</CardTitle>
+          <CardTitle>{check.allowed ? "Créer votre espace de travail" : "Aucun espace de travail"}</CardTitle>
           <CardDescription>
-            Un espace regroupe les roadmaps de votre programme. Vous pourrez inviter votre équipe ensuite.
+            {check.allowed
+              ? "Un espace regroupe les roadmaps de votre programme. Vous pourrez inviter votre équipe ensuite."
+              : "Ton compte n'est rattaché à aucun espace. Cette instance Apex est privée : demande une invitation à l'administrateur d'un espace, puis ouvre le lien reçu."}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="name">Nom de l'espace</Label>
-              <Input
-                id="name"
-                placeholder="Ex : Programme Q4"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                autoFocus
-              />
-            </div>
-            {error && <p className="text-sm text-danger">{error}</p>}
-            <Button type="submit" disabled={loading}>
-              {loading ? "Création..." : "Créer l'espace"}
-            </Button>
-          </form>
-        </CardContent>
+        {check.allowed && (
+          <CardContent>
+            <WorkspaceCreateForm />
+          </CardContent>
+        )}
       </Card>
     </div>
   );

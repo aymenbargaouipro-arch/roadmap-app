@@ -10,10 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { safeNextPath } from "@/lib/safe-redirect";
 
+// Instance privee (audit M1) : on s'inscrit avec le lien d'invitation, dont le jeton arrive
+// dans le parametre next (/invite/<jeton>). Le serveur reste seul juge du droit d'entree.
+const INVITE_PATH = /^\/invite\/([A-Za-z0-9_-]{16,64})$/;
+
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = safeNextPath(searchParams.get("next"));
+  const inviteToken = next ? (INVITE_PATH.exec(next)?.[1] ?? null) : null;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,9 +33,9 @@ function RegisterForm() {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, inviteToken }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
       setError(data.error ?? "Une erreur est survenue.");
@@ -38,14 +43,18 @@ function RegisterForm() {
       return;
     }
 
+    // Inscription par invitation : le compte a deja rejoint l'espace, le lien peut etre epuise
+    // (lien Admin a usage unique). On va donc directement au dashboard, pas sur l'invitation.
+    const destination = inviteToken ? "/dashboard" : next || "/dashboard";
+
     const signInRes = await signIn("credentials", { email, password, redirect: false });
     setLoading(false);
 
     if (signInRes?.error) {
-      router.push(next ? `/login?next=${encodeURIComponent(next)}` : "/login");
+      router.push(`/login?next=${encodeURIComponent(destination)}`);
       return;
     }
-    router.push(next || "/dashboard");
+    router.push(destination);
     router.refresh();
   }
 
@@ -54,7 +63,11 @@ function RegisterForm() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Créer un compte</CardTitle>
-          <CardDescription>Commencez à piloter vos roadmaps.</CardDescription>
+          <CardDescription>
+            {inviteToken
+              ? "Crée ton compte pour rejoindre l'espace qui t'invite."
+              : "L'inscription se fait sur invitation : utilise le lien reçu de ton administrateur."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
