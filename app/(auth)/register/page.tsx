@@ -90,12 +90,12 @@ function RegisterForm() {
               <Input
                 id="password"
                 type="password"
-                minLength={8}
+                minLength={12}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <p className="text-xs text-ink-muted">8 caractères minimum.</p>
+              <p className="text-xs text-ink-muted">12 caractères minimum.</p>
             </div>
             {error && <p className="text-sm text-danger">{error}</p>}
             <Button type="submit" disabled={loading} className="mt-1">

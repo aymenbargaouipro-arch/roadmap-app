@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Invite } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseJsonBody, requiredText } from "@/lib/validation";
+import { checkRegisterRateLimit, clientIpFromHeaders, recordRegisterFailure } from "@/lib/rate-limit";
 import { consumeInvite, inviteState } from "@/lib/invites";
 import {
   INVITE_INVALID_MESSAGE,
@@ -17,6 +18,7 @@ import {
 //   en une seule transaction (aucun compte ne peut exister sans espace) ;
 // - sans lien : uniquement si la base ne contient encore aucun utilisateur (amorcage).
 // Tout le reste est refuse. Sera complete par la connexion SSO (bloc 2).
+// Limitation de debit (audit M1) : 5 refus d'entree par adresse IP et par heure.
 
 const INVITE_TOKEN = /^[A-Za-z0-9_-]{16,64}$/;
 
@@ -30,7 +32,7 @@ const registerSchema = z.object({
   // securite et des calculs inutilement longs.
   password: z
     .string({ invalid_type_error: "Mot de passe invalide.", required_error: "Mot de passe requis." })
-    .min(8, "Le mot de passe doit contenir au moins 8 caractères.")
+    .min(12, "Le mot de passe doit contenir au moins 12 caractères.")
     .max(72, "Le mot de passe ne doit pas dépasser 72 caractères."),
   inviteToken: z
     .union([z.string(), z.null(), z.undefined()])
@@ -46,11 +48,16 @@ class RegistrationRefused extends Error {
 }
 
 export async function POST(req: Request) {
+  const ip = clientIpFromHeaders((name) => req.headers.get(name));
+  const rateLimitError = checkRegisterRateLimit(ip);
+  if (rateLimitError) return NextResponse.json({ error: rateLimitError }, { status: 429 });
+
   const parsed = await parseJsonBody(req, registerSchema);
   if (!parsed.ok) return parsed.response;
   const { name, email, password, inviteToken } = parsed.data;
 
   if (inviteToken !== null && !INVITE_TOKEN.test(inviteToken)) {
+    recordRegisterFailure(ip);
     return NextResponse.json({ error: INVITE_INVALID_MESSAGE }, { status: 404 });
   }
 
@@ -101,9 +108,11 @@ export async function POST(req: Request) {
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof RegistrationRefused) {
+      recordRegisterFailure(ip);
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if ((err as { code?: string } | null)?.code === "P2002") {
+      recordRegisterFailure(ip);
       return NextResponse.json({ error: REGISTRATION_FAILED_MESSAGE }, { status: 409 });
     }
     console.error("[register] echec inattendu :", err);
