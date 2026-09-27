@@ -10,6 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { safeNextPath } from "@/lib/safe-redirect";
 
+// Instance privee (audit M1) : le lien "Creer un compte" n'est propose qu'a une personne qui
+// arrive depuis une invitation.
+const INVITE_PATH = /^\/invite\/[A-Za-z0-9_-]{16,64}$/;
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -77,12 +81,18 @@ function LoginForm() {
               {loading ? "Connexion..." : "Se connecter"}
             </Button>
           </form>
-          <p className="mt-4 text-center text-sm text-ink-muted">
-            Pas encore de compte ?{" "}
-            <Link href={next ? `/register?next=${encodeURIComponent(next)}` : "/register"} className="text-accent hover:underline">
-              Créer un compte
-            </Link>
-          </p>
+          {next && INVITE_PATH.test(next) ? (
+            <p className="mt-4 text-center text-sm text-ink-muted">
+              Pas encore de compte ?{" "}
+              <Link href={`/register?next=${encodeURIComponent(next)}`} className="text-accent hover:underline">
+                Créer un compte
+              </Link>
+            </p>
+          ) : (
+            <p className="mt-4 text-center text-sm text-ink-muted">
+              Pas encore de compte ? Demande une invitation à l'administrateur de ton espace.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

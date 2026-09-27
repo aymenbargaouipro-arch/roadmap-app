@@ -2,24 +2,29 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { inviteState } from "@/lib/invites";
+import { consumeInvite, inviteState } from "@/lib/invites";
+import { ALREADY_IN_WORKSPACE_MESSAGE, INVITE_INVALID_MESSAGE, lockInstance } from "@/lib/instance-access";
 
-const INVALID_MESSAGE = "Invitation invalide, expirée ou déjà utilisée. Demande un nouveau lien à ton administrateur.";
+// Acceptation d'une invitation par un compte deja connecte. Un compte n'appartient qu'a un
+// seul espace (audit M1) : un compte deja rattache a un AUTRE espace est refuse.
 
 class InviteUnavailableError extends Error {}
+class AlreadyInWorkspaceError extends Error {}
 
 export async function POST(_req: Request, props: { params: Promise<{ token: string }> }) {
   const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+  const userId = session.user.id;
 
   const invite = await prisma.invite.findUnique({ where: { token: params.token } });
   if (!invite || inviteState(invite) !== "active") {
-    return NextResponse.json({ error: INVALID_MESSAGE }, { status: 404 });
+    return NextResponse.json({ error: INVITE_INVALID_MESSAGE }, { status: 404 });
   }
+  const activeInvite = invite;
 
   const existing = await prisma.membership.findUnique({
-    where: { userId_workspaceId: { userId: session.user.id, workspaceId: invite.workspaceId } },
+    where: { userId_workspaceId: { userId, workspaceId: invite.workspaceId } },
   });
   if (existing) {
     // Deja membre : on ne consomme pas le lien, et on ne change pas son role (une promotion
@@ -27,29 +32,28 @@ export async function POST(_req: Request, props: { params: Promise<{ token: stri
     return NextResponse.json({ workspaceId: invite.workspaceId, alreadyMember: true });
   }
 
-  // Consommation atomique : la mise a jour ne passe que si le lien est toujours actif AU
-  // MOMENT de l'ecriture. Deux personnes qui cliquent en meme temps sur un lien a usage
-  // unique ne peuvent donc pas l'utiliser toutes les deux.
+  // Sous verrou d'instance : deux acceptations simultanees de liens d'espaces differents ne
+  // peuvent pas rattacher le meme compte a deux espaces.
   try {
     await prisma.$transaction(async (tx) => {
-      const consumed = await tx.invite.updateMany({
-        where: {
-          id: invite.id,
-          revokedAt: null,
-          expiresAt: { gt: new Date() },
-          ...(invite.maxUses != null ? { useCount: { lt: invite.maxUses } } : {}),
-        },
-        data: { useCount: { increment: 1 } },
-      });
-      if (consumed.count === 0) throw new InviteUnavailableError();
+      await lockInstance(tx);
+
+      const otherMembership = await tx.membership.findFirst({ where: { userId }, select: { id: true } });
+      if (otherMembership) throw new AlreadyInWorkspaceError();
+
+      const consumed = await consumeInvite(tx, activeInvite);
+      if (!consumed) throw new InviteUnavailableError();
 
       await tx.membership.create({
-        data: { userId: session.user.id, workspaceId: invite.workspaceId, role: invite.role },
+        data: { userId, workspaceId: activeInvite.workspaceId, role: activeInvite.role },
       });
     });
   } catch (err) {
     if (err instanceof InviteUnavailableError) {
-      return NextResponse.json({ error: INVALID_MESSAGE }, { status: 404 });
+      return NextResponse.json({ error: INVITE_INVALID_MESSAGE }, { status: 404 });
+    }
+    if (err instanceof AlreadyInWorkspaceError) {
+      return NextResponse.json({ error: ALREADY_IN_WORKSPACE_MESSAGE }, { status: 409 });
     }
     throw err;
   }
