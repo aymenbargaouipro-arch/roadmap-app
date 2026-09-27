@@ -49,7 +49,7 @@ class RegistrationRefused extends Error {
 
 export async function POST(req: Request) {
   const ip = clientIpFromHeaders((name) => req.headers.get(name));
-  const rateLimitError = checkRegisterRateLimit(ip);
+  const rateLimitError = await checkRegisterRateLimit(ip);
   if (rateLimitError) return NextResponse.json({ error: rateLimitError }, { status: 429 });
 
   const parsed = await parseJsonBody(req, registerSchema);
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
   const { name, email, password, inviteToken } = parsed.data;
 
   if (inviteToken !== null && !INVITE_TOKEN.test(inviteToken)) {
-    recordRegisterFailure(ip);
+    await recordRegisterFailure(ip);
     return NextResponse.json({ error: INVITE_INVALID_MESSAGE }, { status: 404 });
   }
 
@@ -108,11 +108,11 @@ export async function POST(req: Request) {
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof RegistrationRefused) {
-      recordRegisterFailure(ip);
+      await recordRegisterFailure(ip);
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if ((err as { code?: string } | null)?.code === "P2002") {
-      recordRegisterFailure(ip);
+      await recordRegisterFailure(ip);
       return NextResponse.json({ error: REGISTRATION_FAILED_MESSAGE }, { status: 409 });
     }
     console.error("[register] echec inattendu :", err);

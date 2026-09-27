@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   });
   if (!membership) return NextResponse.json({ error: "Aucun espace de travail." }, { status: 400 });
 
-  const rateLimitError = checkImportRateLimit(session.user.id, membership.workspaceId);
+  const rateLimitError = await checkImportRateLimit(session.user.id, membership.workspaceId);
   if (rateLimitError) return NextResponse.json({ error: rateLimitError }, { status: 429 });
 
   const formData = await req.formData().catch(() => null);
